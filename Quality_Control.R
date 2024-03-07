@@ -122,8 +122,6 @@ perform_quality_control_variable <- function(df, variable, THRESHOLD_serieslengt
       info <- c(station, percent_na)
       quality_control_results$StationHighNApc <- rbind(quality_control_results$StationHighNApc, info)
     }
-  } else {
-    print(paste("No valid dates for", station))
   }
   }
   
@@ -216,4 +214,41 @@ filter_year <- function(df, station, variable, year_variable, threshold_year, mi
 #Filter
 prec_filtered <- filter_year(df, Station_Name, Precipitacion.mm, Year, 2000, 5, 1)
 tempe_filtered  <- filter_year(df, Station_Name, Tmean.C, Year, 2000, 5, 1)
+
+#_______________________________________________________________________________________
+## Statistics ####
+## Detection and removal physically impossible observations ####
+## Check range of values to detect extremes 
+## Precipitation:: Upper mean monthly threshold for 1500mm and negative values ##
+## Temperature:: Upper mean monthly threshold for 50 and negative values ##
+#_______________________________________________________________________________________
+statistics <- function(data, variable) {
+  data %>%
+    group_by(Station_Name, Month) %>%
+    summarise_at(vars({{ variable }}), list(Mean = ~ifelse(all(is.na(.)), NA, mean(., na.rm = TRUE)),
+                                   Max = ~ifelse(all(is.na(.)), NA, max(., na.rm = TRUE)),
+                                   Min = ~ifelse(all(is.na(.)), NA, min(., na.rm = TRUE)),
+                                   SD = ~ifelse(all(is.na(.)), NA, sd(., na.rm = TRUE)),
+                                   Range = ~ifelse(all(is.na(.)), NA, max(., na.rm = TRUE) - min(., na.rm = TRUE))))
+}
+
+
+# Calculate summary statistics for precipitation and temperature
+prec_statistics <- statistics(prec_filtered, Precipitacion.mm)
+tempe_statistics <- statistics(tempe_filtered, Tmean.C)
+
+### Stations with extreme  precipitation values ##
+prec_filtered <- prec_filtered %>%
+  filter(is.na(Precipitacion.mm) | (Precipitacion.mm >= 0 & Precipitacion.mm <= 1500))
+### Stations with extreme temperature values ##
+### Stations with Tmean higher than Tmax or smaller that Tmin ##
+tempe_filtered <- tempe_filtered %>%
+  filter(is.na(Tmean.C) | (Tmean.C > -20 & Tmean.C < 45))%>%
+  filter(is.na(Tmin.C) | Tmin.C == 0 | is.na(Tmean.C) | Tmean.C == 0|is.na(Tmax.C) 
+         | Tmax.C == 0 |(Tmean.C >= Tmin.C & Tmean.C <= Tmax.C)) %>%
+  select("Station_Name", "Year", "Month", "Station_Altitude", "Tmean.C","X","Y", "Source")
+
+# Calculate summary statistics for precipitation and temperature
+prec_statistics_filtered <- statistics(prec_filtered, "Precipitacion.mm")
+tempe_statistics_filtered <- statistics(tempe_filtered, c("Tmean.C"))
 
