@@ -229,18 +229,35 @@ statistics <- function(df, variable) {
 prec_statistics <- statistics(prec_filtered, Precipitacion.mm)
 tempe_statistics <- statistics(tempe_filtered, Tmean.C)
 
-### Stations with extreme  precipitation values ##
-prec_filtered <- prec_filtered %>%
-  filter(is.na(Precipitacion.mm) | (Precipitacion.mm >= 0 & Precipitacion.mm <= 1500))
-### Stations with extreme temperature values ##
-### Stations with Tmean higher than Tmax or smaller that Tmin ##
-tempe_filtered <- tempe_filtered %>%
-  filter(is.na(Tmean.C) | (Tmean.C > -20 & Tmean.C < 45))%>%
-  filter(is.na(Tmin.C) | Tmin.C == 0 | is.na(Tmean.C) | Tmean.C == 0|is.na(Tmax.C) 
-         | Tmax.C == 0 |(Tmean.C >= Tmin.C & Tmean.C <= Tmax.C)) %>%
-  select("Station_Name", "Year", "Month", "Station_Altitude", "Tmean.C","X","Y", "Source")
+### Function to delete extreme values ##
+filter_extreme_precipitation <- function(df, variable,threshold) {
+  # Filter extreme precipitation values
+  filtered_precip <- df %>%
+    filter(is.na({{ variable }}) | ({{ variable }} >= 0 & {{ variable }} <= threshold))
+  return(filtered_precip)
+}
+
+
+filter_extreme_temperature <- function(df, Tmean_variable, Tmax_variable, Tmin_variable, temp_min, temp_max) {
+  filtered_temperature <- df %>%
+    filter(is.na(.data[[Tmean_variable]]) | (.data[[Tmean_variable]] > temp_min & .data[[Tmean_variable]] < temp_max)) %>%
+    filter(is.na(.data[[Tmin_variable]]) | .data[[Tmin_variable]] == 0 | is.na(.data[[Tmean_variable]]) | .data[[Tmean_variable]] == 0 | is.na(.data[[Tmax_variable]]) 
+           | .data[[Tmax_variable]] == 0 |
+             (.data[[Tmean_variable]] >= .data[[Tmin_variable]] & .data[[Tmean_variable]] <= .data[[Tmax_variable]])) 
+  return(filtered_temperature)
+}
+
+
+# Calculate
+prec_filtered2 <- filter_extreme_precipitation(prec_filtered ,Precipitacion.mm,1500)
+tempe_filtered2 <- filter_extreme_temperature(tempe_filtered ,"Tmean.C","Tmax.C","Tmin.C",-20,45)
+
+
+
+
+
 
 # Calculate summary statistics for precipitation and temperature
-prec_statistics_filtered <- statistics(prec_filtered, "Precipitacion.mm")
-tempe_statistics_filtered <- statistics(tempe_filtered, c("Tmean.C"))
+prec_statistics_filtered <- statistics(prec_filtered, Precipitacion.mm)
+tempe_statistics_filtered <- statistics(tempe_filtered, Tmean.C)
 
