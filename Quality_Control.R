@@ -62,7 +62,7 @@ df$YYYYMMdate <- as.character(paste0(df$Year, "-", sprintf("%02d", df$Month), "-
 
 #_______________________________________________________________________________________
                   
-#Set up QUALITY THRESHOLDS####
+#Set up Quality Thresholf####
 #_______________________________________________________________________________________
 
 perform_quality_control_variable <- function(df, variable, threshold_series_length, threshold_na_percentage) {
@@ -186,7 +186,8 @@ write_report_excel <- function(quality_control_results, filename = "Quality_Cont
 # Combine both reports
   write_report_text(quality_control_precipitation)
   write_report_excel(quality_control_precipitation)
-
+###ERROR IF THE FILE ALREADY EXIST
+  ##DELETE DOESN'T WORK
 #_______________________________________________________________________________________
 
 ##### Filter data by year ####
@@ -241,23 +242,155 @@ filter_extreme_precipitation <- function(df, variable,threshold) {
 filter_extreme_temperature <- function(df, Tmean_variable, Tmax_variable, Tmin_variable, temp_min, temp_max) {
   filtered_temperature <- df %>%
     filter(is.na(.data[[Tmean_variable]]) | (.data[[Tmean_variable]] > temp_min & .data[[Tmean_variable]] < temp_max)) %>%
-    filter(is.na(.data[[Tmin_variable]]) | .data[[Tmin_variable]] == 0 | is.na(.data[[Tmean_variable]]) | .data[[Tmean_variable]] == 0 | is.na(.data[[Tmax_variable]]) 
-           | .data[[Tmax_variable]] == 0 |
+    filter(is.na(.data[[Tmin_variable]]) | .data[[Tmin_variable]] == 0 | is.na(.data[[Tmean_variable]]) | 
+             .data[[Tmean_variable]] == 0 | is.na(.data[[Tmax_variable]])  | .data[[Tmax_variable]] == 0 |
              (.data[[Tmean_variable]] >= .data[[Tmin_variable]] & .data[[Tmean_variable]] <= .data[[Tmax_variable]])) 
   return(filtered_temperature)
 }
-
+####MORE WORK HERE
+####NEEDS ADDITIONS IF TMAX OR TMIN DOESNT EXIST
 
 # Calculate
-prec_filtered2 <- filter_extreme_precipitation(prec_filtered ,Precipitacion.mm,1500)
-tempe_filtered2 <- filter_extreme_temperature(tempe_filtered ,"Tmean.C","Tmax.C","Tmin.C",-20,45)
-
-
-
-
-
+prec_filtered <- filter_extreme_precipitation(prec_filtered ,Precipitacion.mm,1500)
+tempe_filtered <- filter_extreme_temperature(tempe_filtered ,"Tmean.C","Tmax.C","Tmin.C",-20,45)
 
 # Calculate summary statistics for precipitation and temperature
 prec_statistics_filtered <- statistics(prec_filtered, Precipitacion.mm)
 tempe_statistics_filtered <- statistics(tempe_filtered, Tmean.C)
+
+#_______________________________________________________________________________________
+### Selection of Precipitation stations with reliable data####
+#### Assign a threshold based on selected stations #
+#_______________________________________________________________________________________  
+# Filter stations with observation counts greater than 240 (at least 20 years data), after 1990 (more reliable)
+
+reliable_stations <- function(df, variable, variable_year, station_id, X, Y, Altitude, threshold_year, count_threshold) {
+  filtered_stations <- df %>%
+    mutate(Count_obs = if_else(!is.na({{ variable }}) & {{ variable_year }} > {{ threshold_year }}, 1, 0)) %>%
+    group_by({{ station_id }}) %>%
+    mutate(Count_obs = sum(Count_obs)) %>%
+    filter(Count_obs > {{ count_threshold }}) %>%
+    ungroup()
+  
+  filtered_stations <- filtered_stations %>%
+    select({{ station_id }}, {{ X }}, {{ Y }}, {{ Altitude }}) %>%
+    distinct() 
+  
+  return(filtered_stations)
+}
+
+
+# Calculate
+prec_stations <- reliable_stations(prec_filtered, Tmean.C,  Year,  Station_Name, X, Y, Station_Altitude,  1990,  240)
+tempe_stations <- reliable_stations(tempe_filtered, Tmean.C,  Year,  Station_Name, X, Y, Station_Altitude,  1990,  240)
+
+
+
+# Function to calculate differences in distance and altitude
+calculate_differences <- function(data) {
+  diff_x <- outer(data$X, data$X, "-")
+  diff_y <- outer(data$Y, data$Y, "-")
+  diff_altitude <- outer(data$Station_Altitude, data$Station_Altitude, "-")
+  list(diff_x = diff_x, diff_y = diff_y, diff_altitude = diff_altitude)
+}
+
+# Function to find indices of points with the largest distance/difference
+find_largest_distance_indices <- function(diff_matrix) {
+  indices <- which(diff_matrix == max(diff_matrix, na.rm = TRUE), arr.ind = TRUE)
+  unique(indices)
+}
+
+# Function to select points based on the largest distance
+select_points <- function(data, indices) {
+  data[indices, ]
+}
+
+# Function to perform the sampling process
+perform_sampling <- function(df) {
+
+  # Calculate differences
+  differences <- calculate_differences(df)
+  
+  # Find indices with the largest distance
+  indices_x <- find_largest_distance_indices(differences$diff_x)
+  indices_y <- find_largest_distance_indices(differences$diff_y)
+  indices_altitude <- find_largest_distance_indices(differences$diff_altitude)
+  
+  # Combine indices
+  selected_indices <- unique(c(indices_x, indices_y, indices_altitude))
+  
+  # Select points based on the indices
+  selected_points <- select_points(df, selected_indices)
+  
+  return(selected_points)
+}
+####################ERROR!!!
+#########Same results
+##Selection of points to define the threshold
+prec_selected_points <- perform_sampling(prec_stations)
+temp_selected_points <- perform_sampling(tempe_stations)                                       
+prec_points <- st_as_sf(prec_selected_points, coords = c("X", "Y"), crs = 25830)
+temp_points <- st_as_sf(temp_selected_points, coords = c("X", "Y"), crs = 25830)
+
+# Plot the polygon and random points
+plot(StudyArea$geometry)
+plot(prec_points, add = TRUE, pch = 19, col = "red4")
+plot(temp_points, add = TRUE, pch = 19, col = "blue4")
+
+
+#_______________________________________________________________________________________
+### Plot Function for  stations####
+#### Assign a threshold based on selected stations #
+#### Plot a specific Station for many year for a month
+#_______________________________________________________________________________________ 
+station_name<- unique(selected_points$Station_Name)
+
+# Plot Temperature for selected stations for all the months #
+plot_yearly <- function(data,variable,ylim_min,ylim_max) {
+  ggplot(data, aes(x = Year, y = {{ variable }}, color = Station_Name)) +
+    geom_point() +  # Plot points
+    geom_line() +   # Connect points with lines
+    labs(title = "{{ variable }} by Month",
+         x = "Year", y = "{{ variable }}") +
+    theme_minimal() +  # Minimal theme
+    facet_wrap(~Month, scales = "free_y")+
+    coord_cartesian(ylim = c({{ ylim_min }},{{ ylim_max }}))
+}
+####################ERROR!!!
+######### more work
+plot_yearly(tempe_filtered%>%
+                   filter(Station_Name %in% "Alcanar" & Year > 2000), Tmean.C, -10,35)
+
+#___________________________________________________________________________________________________________________________________________
+
+### Detection of outliers ###########
+#___________________________________________________________________________________________________________________________________________# Select a specific station with many observations
+# Range of values per month per stations bigger than 10 degrees
+# Filter out stations and months where the range exceeds 10 degrees Celsius
+errorsT  <- tempe_statistics_filtered%>%
+  filter(Range >= 10)%>%
+  select(Station_Name)%>%
+  distinct()
+station_name<- unique(sort(errorsT$Station_Name))
+
+# Create groups to check easier
+station_groups <- split(unique(station_name), ceiling(seq_along(station_name)/4))
+
+# Plotting specific stations for outlier detection
+plot_outlier_detection <- function(data, station_groups) {
+  plots <- lapply(station_groups, function(group) {
+    plot_temperature(data %>% filter(Station_Name %in% group  & Year > 1990))
+  })
+  return(plots)
+}
+plot_outlier_detection(tempe_filtered, station_groups[1])
+plot_outlier_detection(tempe_filtered, station_groups[2])
+plot_outlier_detection(tempe_filtered, station_groups[3])
+plot_outlier_detection(tempe_filtered, station_groups[4])
+plot_outlier_detection(tempe_filtered, station_groups[5])
+plot_outlier_detection(tempe_filtered, station_groups[6])
+plot_outlier_detection(tempe_filtered, station_groups[7])
+plot_outlier_detection(tempe_filtered, station_groups[8])
+plot_outlier_detection(tempe_filtered, station_groups[9])
+
 
