@@ -137,62 +137,58 @@ quality_control_precipitation<- perform_quality_control_variable(df, "Precipitac
 #_______________________________________________________________________________________
 
 # Text report
-
-# Write report header line
-header_line <- "QUALITY CONTROL REPORT"
-write(header_line, "Quality Control.txt")
-
-# Write Series length info:
-header_line <- paste("List of stations with a time series shorter than the threshold:", THRESHOLD_serieslength)
-write(header_line, "Quality Control.txt", append = TRUE)
-
-# Write the extracted data frame to a text file
-write.table(quality_control_results$ShortSeries, file = "Quality Control.txt", append = TRUE,col.names=!file.exists("Quality Control.txt"))
-
-# Write NA% info
-header_line <- paste("List of stations with a NA% higher than the threshold:", THRESHOLD_NApc, "%.")
-write(header_line, "Quality Control.txt", append = TRUE)
-
-# Write the extracted data frame to a text file
-write.table(quality_control_results$StationHighNApc, file = "Quality Control.txt",   append = TRUE,col.names=!file.exists("Quality Control.txt"))
-
-# No need to explicitly return a message, it will be returned automatically
-"Extraction complete. Check Quality Control.txt files."
-
+write_report_text <- function(quality_control_results, THRESHOLD_serieslength, THRESHOLD_NApc) {
+  # Open file for writing
+  con <- file("Quality Control.txt", "w")
+  
+  # Write header
+  cat("QUALITY CONTROL REPORT\n", file = con)
+  
+  # Write Series length info
+  cat("List of stations with a time series shorter than the threshold:", THRESHOLD_serieslength, "\n", file = con)
+  write.table(quality_control_results$ShortSeries, file = con, col.names = !file.exists("Quality Control.txt"))
+  
+  # Write NA% info
+  cat("\nList of stations with a NA% higher than the threshold:", THRESHOLD_NApc, "%.\n", file = con)
+  write.table(quality_control_results$StationHighNApc, file = con, col.names = !file.exists("Quality Control.txt"))
+  
+  # Close the file
+  close(con)
+}
 # Excel Report
 
 # Create a new Excel workbook
 wb <- createWorkbook()
 
-# Add a worksheet for each section of the report
-addWorksheet(wb, "Series Length")
-addWorksheet(wb, "High NA Percentage")
-addWorksheet(wb, "NA Percentage")
-
-# Write headers to each worksheet
-writeData(wb, sheet = "Series Length", x = "QUALITY CONTROL REPORT", startCol = 1, startRow = 1)
-writeData(wb, sheet = "Series Length", x = paste("List of stations with a time series shorter than the threshold:", THRESHOLD_serieslength), startCol = 1, startRow = 2)
-
-writeData(wb, sheet = "High NA Percentage", x = "QUALITY CONTROL REPORT", startCol = 1, startRow = 1)
-writeData(wb, sheet = "High NA Percentage", x = paste("List of stations with an NA% higher than the threshold:", THRESHOLD_NApc, "%."), startCol = 1, startRow = 2)
-
-writeData(wb, sheet = "NA Percentage", x = "QUALITY CONTROL REPORT", startCol = 1, startRow = 1)
-writeData(wb, sheet = "NA Percentage", x = "List of stations with an NA%.", startCol = 1, startRow = 2)
-
-# Write Series length info to Excel
-writeData(wb, sheet = "Series Length", x = quality_control_results$ShortSeries, startRow = 3)
-writeData(wb, sheet = "High NA Percentage", x = quality_control_results$StationHighNApc, startRow = 3)
-
-# Check if the file exists
-if (file.exists("Quality Control.xlsx")) {
-  # Delete the existing file
-  file.remove("Quality Control.xlsx")
+# Excel report
+write_report_excel <- function(quality_control_results) {
+  wb <- createWorkbook()
+  sheets <- c("Series Length", "High NA Percentage")
+  headers <- c("List of stations with a time series shorter than the threshold:",
+               "List of stations with an NA% higher than the threshold:")
+  
+  for (i in seq_along(sheets)) {
+    addWorksheet(wb, sheets[i])
+    writeData(wb, sheet = sheets[i], x = "QUALITY CONTROL REPORT", startCol = 1, startRow = 1)
+    writeData(wb, sheet = sheets[i], x = headers[i], startCol = 1, startRow = 2)
+    writeData(wb, sheet = sheets[i], x = quality_control_results[[names(quality_control_results)[i]]], startRow = 3)
+  }
+  # Check if the file exists
+  if (file.exists("Quality Control.xlsx")) {
+    # Delete the existing file
+    file.remove("Quality Control.xlsx") 
+    saveWorkbook(wb, "Quality Control.xlsx")
+  }
 }
 
-# Save the workbook to an Excel file
-saveWorkbook(wb, "Quality Control.xlsx")
+# Combine both reports
+write_quality_control_report <- function(df, variable, THRESHOLD_serieslength, THRESHOLD_NApc) {
+  write_report_text(quality_control_results, THRESHOLD_serieslength, THRESHOLD_NApc)
+  write_report_excel(quality_control_results)
+}
 
-
+# Call the function to perform quality control and generate reports
+perform_quality_control_report(df, "Precipitacion.mm", THRESHOLD_serieslength = 5, THRESHOLD_NApc = 10)
 
 #_______________________________________________________________________________________
 
