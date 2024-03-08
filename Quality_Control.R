@@ -198,7 +198,7 @@ QA_serieslenght_shortlist <- function(df, variable, threshold_series_length) {
 }
 
 ##calculate
-short_precipitation<- QA_serieslenght_shortlist(processed_df, "Precipitation", 1)
+short_series<- QA_serieslenght_shortlist(processed_df, "Precipitation", 1)
 
 #_______________________________________________________________________________________
 
@@ -257,55 +257,121 @@ NA_precipitation<- QA_NApc_shortlist(processed_df, "Precipitation", 30)
 
 #Save reports (text,excel)####
 #_______________________________________________________________________________________
-
-# Text report
-write_report_text <- function(quality_control_results, filename = "Quality_Control_Report.txt") {
-  # Open file for writing
-  con <- file(filename, "w")
-  
+export_report <- function(short_series, NA_precipitation, text_file_path, excel_file_path) {
+  # Export short series results to text file
+  con <- file(text_file_path, "w")
   # Write header
   cat("QUALITY CONTROL REPORT\n", file = con)
-  
-  # Write Series length info
   cat("List of stations with a time series shorter than the threshold:\n", file = con)
-  write.table(quality_control_results$ShortSeries, file = con, row.names = FALSE)
+  write.table(short_series, file = con, sep = "\t", row.names = FALSE)
   
-  # Write NA% info
+  # Export high NA percentage results to text file
   cat("\nList of stations with an NA percentage higher than the threshold:\n", file = con)
-  write.table(quality_control_results$StationHighNApc, file = con, row.names = FALSE)
-  
+  write.table(NA_precipitation, file = con, sep = "\t", row.names = FALSE)
   # Close the file
   close(con)
+  
+  # Export both results to Excel file
+  write.xlsx(list(Short_Series = short_series, High_NA_Percentage = NA_precipitation),
+             file = excel_file_path, sheetName = c("Short_Series", "High_NA_Percentage"), rowNames = FALSE)
 }
 
-# Excel report
-write_report_excel <- function(quality_control_results, filename = "Quality_Control_Report.xlsx") {
+export_report(short_series, NA_precipitation, "quality_control_report.txt", "quality_control_report.xlsx")
+
+
+###NEEDS to include the threshold?
+###Maybe without cat to be used in other functions results
+
+
+#__________________________________________________________________________
+### QA_serieslenght_plot ####
+#__________________________________________________________________________
+precipitation_df <- processed_df %>%
+    rename(Variable = "Precipitation")
+
+####MAYBE IT NEEDS TO BE APPLICABLE FOR ALL THE VARIABLES IN THE SAME FUNCTION?
+
+# Plot Temperature for selected stations for all the months #
+QA_serieslenght_plot <- function(df,short_series,ylim_min,ylim_max) {
+  # Filter data for shortlisted stations
+  shortlisted_stations <- unique(short_series$Station_Name)
+  shortlisted_data <- df[df$Station_ID %in% shortlisted_stations, ]
   
-  # Check if the file exists
-  if (file.exists("Quality Control.xlsx")) {
-    # Delete the existing file
-    file.remove("Quality Control.xlsx") 
+  # Plot time series for each shortlisted station
+  plots <- list()
+  for (station_name in shortlisted_stations) {
+    station_data <- shortlisted_data[shortlisted_data$Station_ID == station_name, ]
+    
+    # Create plot for precipitation time series
+    p <-  ggplot(station_data, aes(x = Month, y = Variable, color = Station_ID)) +
+            geom_point() +  # Plot points
+            geom_line() +   # Connect points with lines
+      labs(title = paste("Time Series Plot for Station", station_name),
+            x = "Month", y =  "Variable") +
+            theme_minimal() +
+            coord_cartesian(ylim = c({{ ylim_min }},{{ ylim_max }}))
+    plots[[station_name]] <- p
   }
-  # Create a new workbook
-  wb <- createWorkbook()
-  # Add worksheets
-  addWorksheet(wb, "ShortSeries")
-  addWorksheet(wb, "StationHighNApc")
   
-  # Write data to worksheets
-  writeData(wb, "ShortSeries", quality_control_results$ShortSeries)
-  writeData(wb, "StationHighNApc", quality_control_results$StationHighNApc)
-  
-  
-  # Save the workbook
-  saveWorkbook(wb, filename)
+  return(plots)
 }
 
-# Combine both reports
-  write_report_text(quality_control_precipitation)
-  write_report_excel(quality_control_precipitation)
-###ERROR IF THE FILE ALREADY EXIST
-  ##DELETE DOESN'T WORK
+# Generate plots for shortlisted stations
+shortlisted_plots <- QA_serieslenght_plot (precipitation_df, short_series,0,350)
+
+
+# Print individual plots
+for (station_name in names(shortlisted_plots)) {
+  print(shortlisted_plots[[station_name]])
+}
+
+#__________________________________________________________________________
+### QA_NApc_plot ####
+#__________________________________________________________________________
+precipitation_df <- processed_df %>%
+  rename(Variable = "Precipitation")
+
+####I THINK ITS BETTER THE NA TO BE PLOTTED BY YEAR
+
+# Plot Temperature for selected stations for all the months #
+QA_NApc_plot <- function(df,highNA,ylim_min,ylim_max) {
+  # Filter data for shortlisted stations
+  highNA_stations <- unique(highNA$Station_ID)
+  highNA_data <- df[df$Station_ID %in% highNA_stations, ]
+  
+  # Plot time series for each shortlisted station
+  plots <- list()
+  for (Station_ID in highNA_stations) {
+    station_data <- highNA_data[highNA_data$Station_ID == Station_ID, ]
+    
+    # Create plot for precipitation time series
+    p <-  ggplot(station_data, aes(x = Year, y = Variable, color = Station_ID)) +
+      geom_point() +  
+      geom_line() +   
+      labs(title = paste("High percentage of NA in Station", Station_ID),
+           x = "Year", y =  "Variable") +
+      theme_minimal()  +
+      facet_wrap(~Month, scales = "free_y")+
+      coord_cartesian(ylim = c({{ ylim_min }},{{ ylim_max }}))
+    plots[[Station_ID]] <- p
+  }
+  
+  return(plots)
+}
+
+# Generate plots for shortlisted stations
+High_NA_plots <- QA_NApc_plot(precipitation_df, NA_precipitation,0,350)
+
+
+# Print individual plots
+for (Station_ID in names(High_NA_plots)) {
+  print(High_NA_plots[[Station_ID]])
+}
+
+
+
+
+
 #_______________________________________________________________________________________
 
 ##### Filter data by year ####
