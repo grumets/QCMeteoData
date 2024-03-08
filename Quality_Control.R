@@ -55,14 +55,51 @@ read_weather_data <- function(csv_files) {
 }
 # Load meteorological data
 df <- read_weather_data(csv_files)
-# Transform Year and Month to YYYYMM date format
-df$YYYYMMdate <- as.character(paste0(df$Year, "-", sprintf("%02d", df$Month), "-15"))
+# Function to QA_preprocessing raw Meteodata
 
+####ERRORS WITH IFELSE
+QA_preprocessing <- function(raw_meteodata_df, Station_ID, Latitude, Longitude, Altitude, Variable, Year, Month) {
+  # Create a new data frame with standardized column names and data types
+  processed_df <- raw_meteodata_df %>%
+    # Rename columns if needed
+    rename(
+      Station_ID = {{ Station_ID }},
+      Latitude = {{ Latitude }},
+      Longitude = {{ Longitude }},
+      Altitude = {{ Altitude }},
+      Variable = {{ Variable }}
+    ) %>%
+    
+    # Check time columns and format
+    mutate(
+      Year = ifelse({{ Year }} %in% colnames(.), {{ Year }}, NA_real_),
+      Month = ifelse({{ Month }} %in% colnames(.), {{ Month }}, NA_integer_),
+      Date = ifelse({{ Date}} %in% colnames(.), {{ Date}}, NA_integer_),
+      YYYYMMdate = as.Date(paste0(Year, "-", sprintf("%02d", Month), "-15"))
+    ) %>%  
+    group_by(Station_ID) %>%
+    mutate(
+      Start_Date = ifelse(
+        "station_StartDate" %in% colnames(.),
+        as.character(station_StartDate),
+        min(YYYYMMdate)
+      ),
+      End_Date = ifelse(
+        "station_EndDate" %in% colnames(.),
+        as.character(station_EndDate),
+        max(YYYYMMdate)
+      )
+    )
+  # Return the processed data frame
+  return(processed_df)
+}
+ 
+prec <- QA_preprocessing(df, "Station_Name","X","Y", "Station_Altitude", "Precipitacion.mm","Year", "Month")
 
 
 #_______________________________________________________________________________________
                   
-#Set up Quality Thresholf####
+#Set up Quality Threshold####
 #_______________________________________________________________________________________
 
 perform_quality_control_variable <- function(df, variable, threshold_series_length, threshold_na_percentage) {
