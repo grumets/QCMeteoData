@@ -96,28 +96,70 @@ QA_preprocessing <- function(raw_meteodata_df, Station_ID, Latitude, Longitude, 
  
 prec <- QA_preprocessing(df, "Station_Name","X","Y", "Station_Altitude", "Precipitacion.mm","Year", "Month")
 
+####FOR NOW
+process_data <- function(raw_df) {
+  processed_df <- raw_df %>%
+    rename(
+      Station_ID = "Station_Name",
+      Latitude = "X",
+      Longitude = "Y",
+      Altitude = "Station_Altitude",
+      Precipitation = "Precipitacion.mm",
+      Tmean = "Tmean.C",
+      Tmin = "Tmin.C",
+      Tmax = "Tmax.C"
+    ) %>%
+    mutate(
+      YYYYMMdate = as.character(paste0(Year, "-", sprintf("%02d", Month), "-15"))
+    ) %>%
+    group_by(Station_ID) %>%
+    mutate(
+      Start_Date = ifelse(
+        "station_StartDate" %in% colnames(.),
+        as.character(station_StartDate),
+        min(YYYYMMdate)
+      ),
+      End_Date = ifelse(
+        "station_EndDate" %in% colnames(.),
+        as.character(station_EndDate),
+        max(YYYYMMdate)
+      )
+    ) %>%
+    mutate(
+      Start_Date = as.Date(Start_Date),
+      End_Date = as.Date(End_Date)
+    ) %>%
+    ungroup() %>%
+    select(
+      Station_ID, Year, Month, Altitude, Precipitation, Tmean, Tmin, Tmax,
+      Latitude, Longitude, Start_Date, End_Date, YYYYMMdate
+    )
+  
+  return(processed_df)
+}
+
+# Calculate
+processed_df <- process_data(df)
+
 
 #_______________________________________________________________________________________
                   
-#Set up Quality Threshold####
+#Length of the time series####
 #_______________________________________________________________________________________
 
-perform_quality_control_variable <- function(df, variable, threshold_series_length, threshold_na_percentage) {
+QA_serieslenght_shortlist <- function(df, variable, threshold_series_length) {
   # Initialize result data frames
   short_series <- data.frame(Station_Name = character(), 
                              Initial_date = character(), 
                              End_date = character(), 
                              Series_years_length = character(),
                              stringsAsFactors = FALSE)
-  
-  high_na_percentage <- data.frame(Station_Name = character(), NA_percentage = character(),
-                                   stringsAsFactors = FALSE)
-  
+
   # Iterate over unique station names
-  unique_stations <- unique(df$Station_Name)
+  unique_stations <- unique(df$Station_ID)
   for (station_name in unique_stations) {
     # Subset data for the current station
-    subset_data <- df[df$Station_Name == station_name, ]
+    subset_data <- df[df$Station_ID == station_name, ]
     
     # Filter data to specific variable
     subset_data <- subset_data %>% filter(!all(is.na(.data[[variable]])))
@@ -140,7 +182,6 @@ perform_quality_control_variable <- function(df, variable, threshold_series_leng
       subset_data <- subset_data %>%
         complete(YYYYMMdate = all_dates)
       
-      
       # Check if the difference in years is less than the threshold series length
       if (difference_in_years < threshold_series_length) {
         info <- c(Station_Name = station_name, 
@@ -149,6 +190,48 @@ perform_quality_control_variable <- function(df, variable, threshold_series_leng
                   Series_years_length = difference_in_years)
         short_series <- bind_rows(short_series, info)
       } 
+    }
+  }
+  # Return the results as a list
+  quality_control_results <-  short_series
+  return(quality_control_results)
+}
+
+##calculate
+short_precipitation<- QA_serieslenght_shortlist(processed_df, "Precipitation", 1)
+
+#_______________________________________________________________________________________
+
+#% NA values####
+#_______________________________________________________________________________________
+
+QA_NApc_shortlist<- function(df, variable, threshold_na_percentage) {
+  # Initialize result data frames
+  high_na_percentage <- data.frame(Station_ID = character(), NA_percentage = character(),
+                                   stringsAsFactors = FALSE)
+  
+  # Iterate over unique station names
+  unique_stations <- unique(df$Station_ID)
+  for (station_name in unique_stations) {
+    # Subset data for the current station
+    subset_data <- df[df$Station_ID == station_name, ]
+    
+    # Filter data to specific variable
+    subset_data <- subset_data %>% filter(!all(is.na(.data[[variable]])))
+    
+    # Check if there are valid dates for the variable
+    if (any(!is.na(subset_data$YYYYMMdate))) {
+      # Find the earliest and oldest dates
+      earliest_date <- min(subset_data$YYYYMMdate, na.rm = TRUE)
+      oldest_date <- max(subset_data$YYYYMMdate, na.rm = TRUE)
+ 
+      # Create a sequence of all the dates between the minimum and maximum dates for the station
+      all_dates <- seq(from = as.Date(earliest_date), to = as.Date(oldest_date), by = "1 month") 
+      all_dates <- as.character(all_dates)
+      
+      # Use the complete function to fill in missing dates
+      subset_data <- subset_data %>%
+        complete(YYYYMMdate = all_dates)
       
       # Calculate the percentage of NA values
       num_na <- sum(is.na(subset_data[[variable]]))
@@ -157,20 +240,18 @@ perform_quality_control_variable <- function(df, variable, threshold_series_leng
       
       # Check if the % of NA values is greater than the threshold NA percentage
       if (percent_na > threshold_na_percentage) {
-        info <- c(Station_Name = station_name, NA_percentage = percent_na)
+        info <- c(Station_ID = station_name, NA_percentage = percent_na)
         high_na_percentage <- bind_rows(high_na_percentage, info)
-      }
-    } 
+    }
   }
-  
+  }
   # Return the results as a list
-  quality_control_results <- list(ShortSeries = short_series, StationHighNApc = high_na_percentage)
-  return(quality_control_results)
+  StationHighNApc <-  high_na_percentage
+  return(StationHighNApc)
 }
 
-  
 ##calculate
-quality_control_precipitation<- perform_quality_control_variable(df, "Precipitacion.mm", 1, 30)
+NA_precipitation<- QA_NApc_shortlist(processed_df, "Precipitation", 30)
 
 #_______________________________________________________________________________________
 
