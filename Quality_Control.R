@@ -554,7 +554,7 @@ plot_yearly <- function(data,variable,selected_points,ylim_min,ylim_max) {
     p <-  ggplot(data, aes(x = Year, y = {{ variable }}, color = Station_Name)) +
     geom_point() +  # Plot points
     geom_line() +   # Connect points with lines
-    labs(title = "{{ variable }} by Month",
+    labs(title = paste({{ variable }}, " by Month"),
          x = "Year", y = "{{ variable }}") +
     theme_minimal() +  # Minimal theme
     facet_wrap(~Month, scales = "free_y")+
