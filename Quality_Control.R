@@ -82,14 +82,15 @@ QA_preprocessing <- function(raw_meteodata_df, Station_ID, Latitude, Longitude, 
       Start_Date = ifelse(
         "station_StartDate" %in% colnames(.),
         as.character(station_StartDate),
-        min(YYYYMMdate)
+        as.character(min(YYYYMMdate))
       ),
       End_Date = ifelse(
         "station_EndDate" %in% colnames(.),
         as.character(station_EndDate),
-        max(YYYYMMdate)
+        as.character(max(YYYYMMdate))
       )
-    )
+    ) %>%
+    ungroup()
   # Return the processed data frame
   return(processed_df)
 }
@@ -132,7 +133,7 @@ process_data <- function(raw_df) {
     ungroup() %>%
     select(
       Station_ID, Year, Month, Altitude, Precipitation, Tmean, Tmin, Tmax,
-      Latitude, Longitude, Start_Date, End_Date, YYYYMMdate
+      Latitude, Longitude, Start_Date, End_Date, YYYYMMdate,Source
     )
   
   return(processed_df)
@@ -285,7 +286,7 @@ precipitation_df <- processed_df %>%
 ####MAYBE IT NEEDS TO BE APPLICABLE FOR ALL THE VARIABLES IN THE SAME FUNCTION?
 
 # Plot Temperature for selected stations for all the months #
-QA_serieslenght_plot <- function(df,short_series,ylim_min,ylim_max) {
+QA_serieslenght_plot <- function(df,short_series) {
   # Filter data for shortlisted stations
   shortlisted_stations <- unique(short_series$Station_ID)
   shortlisted_data <- df[df$Station_ID %in% shortlisted_stations, ]
@@ -301,8 +302,7 @@ QA_serieslenght_plot <- function(df,short_series,ylim_min,ylim_max) {
              geom_line(aes(group = 1)) +   
       labs(title = paste("Time Series Plot for Station", Station_ID),
             x = "Month", y =  "Variable") +
-            theme_minimal() +
-            coord_cartesian(ylim = c({{ ylim_min }},{{ ylim_max }}))
+            theme_minimal() 
     plots[[Station_ID]] <- p
   }
   
@@ -310,8 +310,7 @@ QA_serieslenght_plot <- function(df,short_series,ylim_min,ylim_max) {
 }
 
 # Generate plots for shortlisted stations
-shortlisted_plots <- QA_serieslenght_plot (precipitation_df, short_series,0,250)
-
+shortlisted_plots <- QA_serieslenght_plot (precipitation_df, short_series)
 
 # Print individual plots
 for (Station_ID in names(shortlisted_plots)) {
@@ -332,7 +331,7 @@ precipitation_df <- processed_df %>%
 ####I THINK ITS BETTER THE NA TO BE PLOTTED BY YEAR
 
 # Plot Temperature for selected stations for all the months #
-QA_NApc_plot <- function(df,highNA,ylim_min,ylim_max) {
+QA_NApc_plot <- function(df,highNA) {
   # Filter data for shortlisted stations
   highNA_stations <- unique(highNA$Station_ID)
   highNA_data <- df[df$Station_ID %in% highNA_stations, ]
@@ -349,8 +348,7 @@ QA_NApc_plot <- function(df,highNA,ylim_min,ylim_max) {
       labs(title = paste("High percentage of NA in Station", Station_ID),
            x = "Year", y =  "Variable") +
       theme_minimal()  +
-      facet_wrap(~Month, scales = "free_y")+
-      coord_cartesian(ylim = c({{ ylim_min }},{{ ylim_max }}))
+      facet_wrap(~Month, scales = "free_y")
     plots[[Station_ID]] <- p
   }
   
@@ -411,6 +409,8 @@ QA_outlier_variation <- function(df, variable) {
 prec_statistics <- QA_outlier_variation(prec_filtered, Precipitation)
 tempe_statistics <- QA_outlier_variation(tempe_filtered, Tmean)
 
+###Extreme values###
+
 ### Function to delete extreme values of precipitation ##
 QA_outlier_precipitation <- function(df, variable,threshold) {
   # Filter extreme precipitation values
@@ -418,7 +418,8 @@ QA_outlier_precipitation <- function(df, variable,threshold) {
     filter(is.na({{ variable }}) | ({{ variable }} >= 0 & {{ variable }} <= threshold))
   return(filtered)
 }
-# Calculate
+
+# Calculate for Precipitation
 prec_filtered2 <- QA_outlier_precipitation (prec_filtered ,Precipitation,1500)
 # Create a data set containing removed values
 removed_valuesP <- anti_join(prec_filtered, prec_filtered2)
@@ -444,15 +445,15 @@ QA_outlier_temperature <- function(df, Tmean_variable, Tmax_variable, Tmin_varia
   
   return(filtered_temperature)
 }
-####MORE WORK HERE!! maybe can be simpler??
+####Maybe can be simpler??
 
-# Calculate
+# Calculate for Temperature
 tempe_filtered2 <- QA_outlier_temperature(tempe_filtered ,"Tmean", "Tmax","Tmin", -20,45)
 # Create a data set containing removed values
 removed_valuesT <- anti_join(tempe_filtered, tempe_filtered2)
 
 
-# Calculate summary statistics for precipitation and temperature
+# Calculate summary statistics for filtered precipitation and temperature
 prec_statistics_filtered <- QA_outlier_variation(prec_filtered2, Precipitation)
 tempe_statistics_filtered <- QA_outlier_variation(tempe_filtered2, Tmean)
 
@@ -535,7 +536,7 @@ plot(st_geometry(temp_points), add = TRUE, pch = 19, col = "blue4")
 #### Plot a specific Station for many year for a month
 #_______________________________________________________________________________________ 
 # Plot Temperature for selected stations for all the months #
-QA_plot_yearly <- function(df, variable, selected_points, ylim_min, ylim_max) {
+QA_plot_yearly <- function(df, variable, selected_points) {
   # Filter df for shortlisted stations
   selected_df <- df[df$Station_ID %in% unique(selected_points$Station_ID), ]
   
@@ -546,13 +547,12 @@ QA_plot_yearly <- function(df, variable, selected_points, ylim_min, ylim_max) {
     labs(title = paste(variable, "by Month"),
          x = "Year", y = variable) +
     theme_minimal() +  # Minimal theme
-    facet_wrap(~Month, scales = "free_y") +
-    coord_cartesian(ylim = c(ylim_min, ylim_max))
+    facet_wrap(~Month, scales = "free_y") 
 }
 
 # Generate plots for reliable stations
-QA_plot_yearly(prec_filtered2,"Precipitation",prec_selected_points,0,500)
-QA_plot_yearly(tempe_filtered2,"Tmean",temp_selected_points,-10,30)
+QA_plot_yearly(prec_filtered2,"Precipitation",prec_selected_points)
+QA_plot_yearly(tempe_filtered2,"Tmean",temp_selected_points)
 
 
 #___________________________________________________________________________________________________________________________________________
@@ -572,14 +572,17 @@ QA_outlier_shortlist <- function(df_statistics, Range_threshold) {
 
 #Calculate
 outliersT <- QA_outlier_shortlist(tempe_statistics_filtered,10)
+outliersP <- QA_outlier_shortlist(prec_statistics_filtered,700)
 
 ##Export results in a report
 export_report(outliersT,  "outliers_temperature_report.txt", "outliers_temperature_report.xlsx")
+export_report(outliersP,  "outliers_precipitation_report.txt", "outliers_precipitation_report.xlsx")
 
 ####Function to buffer around each suspicious station
+###COULD BE IMPORVED
 stations_in_buffer <- function(outlier_stations_sf, all_stations,variable, initial_buffer_distance) {
   # Convert all_stations to sf object
-  all_stations <- QA_reliable_stations(all_stations, {{ variable}}, 1950,  120) %>% 
+  all_stations <- QA_reliable_stations(all_stations, {{ variable}}, 1990,  120) %>% 
     ### Needs to include stations with many observation in order to compare
     select(Station_ID, Longitude, Latitude) %>%
     distinct()
@@ -615,7 +618,7 @@ stations_in_buffer <- function(outlier_stations_sf, all_stations,variable, initi
         break  # Exit the loop
       } else {
         # Increase the buffer distance
-        buffer_distance <- buffer_distance + 1000  # Increase by 1 km
+        buffer_distance <- buffer_distance + 5000  # Increase by 5 km
       }
     }
   }
@@ -625,7 +628,34 @@ stations_in_buffer <- function(outlier_stations_sf, all_stations,variable, initi
 
 
 
-#Calculate
-stations_per_buffer<- stations_in_buffer(outliersT,tempe_filtered2,"Tmean",3000)
+#Calculate temperature
+stations_per_bufferT<- stations_in_buffer(outliersT,tempe_filtered2,"Tmean",3000) #Distance in meters
+ 
+# List to store plots for each buffer zone
+buffer_plotsT <- list()
 
-QA_plot_yearly(tempe_filtered2,"Tmean",stations_per_buffer[[1]],-10,35)
+# Iterate over each buffer zone
+for (i in seq_along(stations_per_bufferT)) {
+  # Generate plot for the current buffer zone
+  plot <- QA_plot_yearly(tempe_filtered2, "Tmean", stations_per_buffer[[i]])
+  
+  # Store the plot in the list
+  buffer_plots[[i]] <- plot
+}
+
+
+#Calculate precipitation
+## Takes a lot of time to calculate
+stations_per_bufferP<- stations_in_buffer(outliersP,prec_filtered2,"Precipitation",50000)
+
+# List to store plots for each buffer zone
+buffer_plotsP <- list()
+
+# Iterate over each buffer zone
+for (i in seq_along(stations_per_bufferP)) {
+  # Generate plot for the current buffer zone
+  plot <- QA_plot_yearly(prec_filtered2, "Precipitation", stations_per_buffer[[i]])
+  
+  # Store the plot in the list
+  buffer_plotsP[[i]] <- plot
+}
