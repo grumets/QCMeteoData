@@ -595,10 +595,8 @@ stations_in_buffer <- function(outlier_stations_sf, all_stations,variable, initi
   for (i in 1:nrow(outlier_stations_sf)) {
     # Get the ID of the current outlier station
     outlier_id <- outlier_stations_sf$Station_ID[i]
-    
     # Filter all stations to get the outlier station
     outlier_station <- all_stations_sf[all_stations_sf$Station_ID == outlier_id, ] 
-    
     # Initialize buffer distance
     buffer_distance <- initial_buffer_distance
     
@@ -609,7 +607,6 @@ stations_in_buffer <- function(outlier_stations_sf, all_stations,variable, initi
       
       # Find stations that intersect with the buffer
       stations_within <- all_stations_sf[st_intersection(all_stations_sf, outlier_buffer), ]
-      
       # Add the list of stations within buffer to the result list
       stations_within_buffer[[i]] <- stations_within
       
@@ -633,13 +630,9 @@ stations_per_bufferT<- stations_in_buffer(outliersT,tempe_filtered2,"Tmean",3000
  
 # List to store plots for each buffer zone
 buffer_plotsT <- list()
-
-# Iterate over each buffer zone
 for (i in seq_along(stations_per_bufferT)) {
   # Generate plot for the current buffer zone
   plot <- QA_plot_yearly(tempe_filtered2, "Tmean", stations_per_buffer[[i]])
-  
-  # Store the plot in the list
   buffer_plots[[i]] <- plot
 }
 
@@ -650,12 +643,8 @@ stations_per_bufferP<- stations_in_buffer(outliersP,prec_filtered2,"Precipitatio
 
 # List to store plots for each buffer zone
 buffer_plotsP <- list()
-
-# Iterate over each buffer zone
 for (i in seq_along(stations_per_bufferP)) {
   # Generate plot for the current buffer zone
   plot <- QA_plot_yearly(prec_filtered2, "Precipitation", stations_per_buffer[[i]])
-  
-  # Store the plot in the list
   buffer_plotsP[[i]] <- plot
 }
