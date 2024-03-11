@@ -571,48 +571,43 @@ QA_outlier_shortlist <- function(df_statistics, Range_threshold) {
     return(outliers)
 }
 
+#Calculate
 outliersT <- QA_outlier_shortlist(tempe_statistics_filtered,10)
+
 ##Export results in a report
 export_report(outliersT,  "outliers_temperature_report.txt", "outliers_temperature_report.xlsx")
 
-
-# Plot outliers
-QA_outlier_plot <- function(df,outliers,ylim_min,ylim_max) {
-  # Filter data for shortlisted stations
-  outliers_stations <- unique(outliers$Station_ID)
-  outliers_data <- df[df$Station_ID %in% outliers_stations, ]
+#### Buffer around each suspicious station
+#####ONE BY ONE
+# Function to select stations within the buffer zone
+stations_in_buffer <- function(outlier_stations, all_stations_sf, buffer_distance) {
+  # Create an empty list to store stations within buffer for each outlier station
+  stations_within_buffer <- list()
   
-  # Plot time series for each shortlisted station
-  plots <- list()
-  for (Station_ID in outliers_stations) {
-    station_data <- outliers_data[outliers_data$Station_ID == Station_ID, ]
+  # Iterate over each outlier station
+  for (i in 1:nrow(outlier_stations)) {
+    # Get the ID of the current outlier station
+    outlier_id <- outlier_stations$Station_ID[i]
     
-    # Create plot for precipitation time series
-    p <-  ggplot(station_data, aes(x = Year, y = Variable, color = Station_ID, group = 1)) +
-      geom_point() +  
-      geom_line() +   
-      labs(title = paste("Possible outliers in Station", Station_ID),
-           x = "Year", y =  "Variable") +
-      theme_minimal()  +
-      facet_wrap(~Month, scales = "free_y")+
-      coord_cartesian(ylim = c({{ ylim_min }},{{ ylim_max }}))
-    plots[[Station_ID]] <- p
+    # Filter all stations to get the outlier station
+    outlier_station <- all_stations[all_stations$Station_ID == outlier_id, ]
+    outlier_station_sf <-st_as_sf(outlier_station, coords = c("Longitude", "Latitude"), crs = 25830)
+    
+    # Create a buffer around the outlier station
+    outlier_buffer <- st_buffer(outlier_station_sf, buffer_distance)
+    
+    # Find stations that intersect with the buffer
+    all_stations_sf <- st_as_sf(all_stations, coords = c("Longitude", "Latitude"), crs = 25830)
+    stations_within <- all_stations_sf[st_intersection(all_stations_sf, outlier_buffer), ]
+    
+    # Add the list of stations within buffer to the result list
+    stations_within_buffer[[i]] <- stations_within
   }
   
-  return(plots)
+  return(stations_within_buffer)
 }
 
-##Rename variable
-tempe_filtered2 <- tempe_filtered2 %>%
-  rename(Variable = "Tmean") 
-# Generate plots for shortlisted stations
-Outliers_plots <- QA_outlier_plot(tempe_filtered2, outliersT,-10,35)
+#Calculate
+stations_per_buffer<- stations_in_buffer(outliersT,all_stations,10000)
 
-
-# Print individual plots
-for (Station_ID in names(Outliers_plots)) {
-  print(Outliers_plots[[Station_ID]])
-}
-
-
-
+QA_plot_yearly(tempe_filtered2,"Variable",g,-10,35)
