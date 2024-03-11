@@ -257,30 +257,23 @@ NA_precipitation<- QA_NApc_shortlist(processed_df, "Precipitation", 30)
 
 #Save reports (text,excel)####
 #_______________________________________________________________________________________
-export_report <- function(short_series, NA_precipitation, text_file_path, excel_file_path) {
-  # Export short series results to text file
+# Function to export report to both text and Excel files
+export_report <- function(report_data, text_file_path, excel_file_path, row_names = FALSE) {
+  # Export report to text file
   con <- file(text_file_path, "w")
-  # Write header
-  cat("QUALITY CONTROL REPORT\n", file = con)
-  cat("List of stations with a time series shorter than the threshold:\n", file = con)
-  write.table(short_series, file = con, sep = "\t", row.names = FALSE)
-  
-  # Export high NA percentage results to text file
-  cat("\nList of stations with an NA percentage higher than the threshold:\n", file = con)
-  write.table(NA_precipitation, file = con, sep = "\t", row.names = FALSE)
-  # Close the file
+  cat("Quality_Control\n", file = con)
+  write.table(report_data, file = con, sep = "\t", row.names = row_names)
   close(con)
   
-  # Export both results to Excel file
-  write.xlsx(list(Short_Series = short_series, High_NA_Percentage = NA_precipitation),
-             file = excel_file_path, sheetName = c("Short_Series", "High_NA_Percentage"), rowNames = FALSE)
+  # Export report to Excel file
+  write.xlsx(report_data, file = excel_file_path, rowNames = row_names)
 }
 
-export_report(short_series, NA_precipitation, "quality_control_report.txt", "quality_control_report.xlsx")
+export_report(short_series,  "short_series_report.txt", "short_series_report.xlsx")
+export_report(NA_precipitation,  "NA_precipitation_report.txt", "NA_precipitation_report.xlsx")
 
 
 ###NEEDS to include the threshold?
-###Maybe without cat to be used in other functions results?
 
 
 #__________________________________________________________________________
@@ -563,41 +556,63 @@ QA_plot_yearly(prec_filtered2,"Precipitation",prec_selected_points,0,500)
 QA_plot_yearly(tempe_filtered2,"Tmean",temp_selected_points,-10,30)
 
 
-# Print individual plots
-for (Station_ID in names(Threshold_plots)) {
-  print(Threshold_plots[[Station_ID]])
-}
-
 #___________________________________________________________________________________________________________________________________________
 
-### Detection of outliers ###########
+### Outliers shortlists ###########
 #___________________________________________________________________________________________________________________________________________# Select a specific station with many observations
-# Range of values per month per stations bigger than 10 degrees
-# Filter out stations and months where the range exceeds 10 degrees Celsius
-errorsT  <- tempe_statistics_filtered%>%
-  filter(Range >= 10)%>%
-  select(Station_ID)%>%
-  distinct()
-Station_ID<- unique(sort(errorsT$Station_ID))
+## For temperature
+QA_outlier_shortlist <- function(df_statistics, Range_threshold) {
+# Filter out stations, which monthly range exceeds 10 degrees Celsius
+    outliers <- df_statistics %>%
+      filter(Range >= {{Range_threshold}})%>%
+      select(Station_ID,Month,Range) %>%
+      distinct()
+    
+    return(outliers)
+}
 
-# Create groups to check easier
-station_groups <- split(unique(Station_ID), ceiling(seq_along(Station_ID)/4))
+outliersT <- QA_outlier_shortlist(tempe_statistics_filtered,10)
+##Export results in a report
+export_report(outliersT,  "outliers_temperature_report.txt", "outliers_temperature_report.xlsx")
 
-# Plotting specific stations for outlier detection
-plot_outlier_detection <- function(data, station_groups) {
-  plots <- lapply(station_groups, function(group) {
-    plot_temperature(data %>% filter(Station_ID %in% group  & Year > 1990))
-  })
+
+# Plot outliers
+QA_outlier_plot <- function(df,outliers,ylim_min,ylim_max) {
+  # Filter data for shortlisted stations
+  outliers_stations <- unique(outliers$Station_ID)
+  outliers_data <- df[df$Station_ID %in% outliers_stations, ]
+  
+  # Plot time series for each shortlisted station
+  plots <- list()
+  for (Station_ID in outliers_stations) {
+    station_data <- outliers_data[outliers_data$Station_ID == Station_ID, ]
+    
+    # Create plot for precipitation time series
+    p <-  ggplot(station_data, aes(x = Year, y = Variable, color = Station_ID, group = 1)) +
+      geom_point() +  
+      geom_line() +   
+      labs(title = paste("Possible outliers in Station", Station_ID),
+           x = "Year", y =  "Variable") +
+      theme_minimal()  +
+      facet_wrap(~Month, scales = "free_y")+
+      coord_cartesian(ylim = c({{ ylim_min }},{{ ylim_max }}))
+    plots[[Station_ID]] <- p
+  }
+  
   return(plots)
 }
-plot_outlier_detection(tempe_filtered, station_groups[1])
-plot_outlier_detection(tempe_filtered, station_groups[2])
-plot_outlier_detection(tempe_filtered, station_groups[3])
-plot_outlier_detection(tempe_filtered, station_groups[4])
-plot_outlier_detection(tempe_filtered, station_groups[5])
-plot_outlier_detection(tempe_filtered, station_groups[6])
-plot_outlier_detection(tempe_filtered, station_groups[7])
-plot_outlier_detection(tempe_filtered, station_groups[8])
-plot_outlier_detection(tempe_filtered, station_groups[9])
+
+##Rename variable
+tempe_filtered2 <- tempe_filtered2 %>%
+  rename(Variable = "Tmean") 
+# Generate plots for shortlisted stations
+Outliers_plots <- QA_outlier_plot(tempe_filtered2, outliersT,-10,35)
+
+
+# Print individual plots
+for (Station_ID in names(Outliers_plots)) {
+  print(Outliers_plots[[Station_ID]])
+}
+
 
 
