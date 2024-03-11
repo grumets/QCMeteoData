@@ -43,10 +43,10 @@ StudyArea <- st_read("C:/Users/e.trypidaki/OneDrive - CREAF/Escritorio/Data/Ebro
 read_weather_data <- function(csv_files) {
   data <- lapply(csv_files, function(csv_file) {
     df <- read.csv(csv_file)
-    df$Station_Name <- as.character(df$Station_Name)
+    df$Station_ID <- as.character(df$Station_ID)
     df$Source <- basename(csv_file)
     df$Year <- as.numeric(df$Year)
-    df <- select(df,"Station_Name","Year","Month","Station_Altitude","Precipitacion.mm",
+    df <- select(df,"Station_ID","Year","Month","Station_Altitude","Precipitacion.mm",
                  "Tmean.C","Tmin.C","Tmax.C","X","Y","Source")
     return(df)
   })
@@ -94,13 +94,13 @@ QA_preprocessing <- function(raw_meteodata_df, Station_ID, Latitude, Longitude, 
   return(processed_df)
 }
  
-prec <- QA_preprocessing(df, "Station_Name","X","Y", "Station_Altitude", "Precipitacion.mm","Year", "Month")
+prec <- QA_preprocessing(df, "Station_ID","X","Y", "Station_Altitude", "Precipitacion.mm","Year", "Month")
 
 ####FOR NOW
 process_data <- function(raw_df) {
   processed_df <- raw_df %>%
     rename(
-      Station_ID = "Station_Name",
+      Station_ID = "Station_ID",
       Latitude = "X",
       Longitude = "Y",
       Altitude = "Station_Altitude",
@@ -149,7 +149,7 @@ processed_df <- process_data(df)
 
 QA_serieslenght_shortlist <- function(df, variable, threshold_series_length) {
   # Initialize result data frames
-  short_series <- data.frame(Station_Name = character(), 
+  short_series <- data.frame(Station_ID = character(), 
                              Initial_date = character(), 
                              End_date = character(), 
                              Series_years_length = character(),
@@ -157,9 +157,9 @@ QA_serieslenght_shortlist <- function(df, variable, threshold_series_length) {
 
   # Iterate over unique station names
   unique_stations <- unique(df$Station_ID)
-  for (station_name in unique_stations) {
+  for (Station_ID in unique_stations) {
     # Subset data for the current station
-    subset_data <- df[df$Station_ID == station_name, ]
+    subset_data <- df[df$Station_ID == Station_ID, ]
     
     # Filter data to specific variable
     subset_data <- subset_data %>% filter(!all(is.na(.data[[variable]])))
@@ -184,7 +184,7 @@ QA_serieslenght_shortlist <- function(df, variable, threshold_series_length) {
       
       # Check if the difference in years is less than the threshold series length
       if (difference_in_years < threshold_series_length) {
-        info <- c(Station_Name = station_name, 
+        info <- c(Station_ID = Station_ID, 
                   Initial_date = earliest_date, 
                   End_date = oldest_date, 
                   Series_years_length = difference_in_years)
@@ -212,9 +212,9 @@ QA_NApc_shortlist<- function(df, variable, threshold_na_percentage) {
   
   # Iterate over unique station names
   unique_stations <- unique(df$Station_ID)
-  for (station_name in unique_stations) {
+  for (Station_ID in unique_stations) {
     # Subset data for the current station
-    subset_data <- df[df$Station_ID == station_name, ]
+    subset_data <- df[df$Station_ID == Station_ID, ]
     
     # Filter data to specific variable
     subset_data <- subset_data %>% filter(!all(is.na(.data[[variable]])))
@@ -240,7 +240,7 @@ QA_NApc_shortlist<- function(df, variable, threshold_na_percentage) {
       
       # Check if the % of NA values is greater than the threshold NA percentage
       if (percent_na > threshold_na_percentage) {
-        info <- c(Station_ID = station_name, NA_percentage = percent_na)
+        info <- c(Station_ID = Station_ID, NA_percentage = percent_na)
         high_na_percentage <- bind_rows(high_na_percentage, info)
     }
   }
@@ -280,7 +280,7 @@ export_report(short_series, NA_precipitation, "quality_control_report.txt", "qua
 
 
 ###NEEDS to include the threshold?
-###Maybe without cat to be used in other functions results
+###Maybe without cat to be used in other functions results?
 
 
 #__________________________________________________________________________
@@ -294,35 +294,35 @@ precipitation_df <- processed_df %>%
 # Plot Temperature for selected stations for all the months #
 QA_serieslenght_plot <- function(df,short_series,ylim_min,ylim_max) {
   # Filter data for shortlisted stations
-  shortlisted_stations <- unique(short_series$Station_Name)
+  shortlisted_stations <- unique(short_series$Station_ID)
   shortlisted_data <- df[df$Station_ID %in% shortlisted_stations, ]
   
   # Plot time series for each shortlisted station
   plots <- list()
-  for (station_name in shortlisted_stations) {
-    station_data <- shortlisted_data[shortlisted_data$Station_ID == station_name, ]
+  for (Station_ID in shortlisted_stations) {
+    station_data <- shortlisted_data[shortlisted_data$Station_ID == Station_ID, ]
     
     # Create plot for precipitation time series
     p <-  ggplot(station_data, aes(x = Month, y = Variable, color = Station_ID)) +
-            geom_point() +  # Plot points
-            geom_line() +   # Connect points with lines
-      labs(title = paste("Time Series Plot for Station", station_name),
+            geom_point() +  
+             geom_line(aes(group = 1)) +   
+      labs(title = paste("Time Series Plot for Station", Station_ID),
             x = "Month", y =  "Variable") +
             theme_minimal() +
             coord_cartesian(ylim = c({{ ylim_min }},{{ ylim_max }}))
-    plots[[station_name]] <- p
+    plots[[Station_ID]] <- p
   }
   
   return(plots)
 }
 
 # Generate plots for shortlisted stations
-shortlisted_plots <- QA_serieslenght_plot (precipitation_df, short_series,0,350)
+shortlisted_plots <- QA_serieslenght_plot (precipitation_df, short_series,0,250)
 
 
 # Print individual plots
-for (station_name in names(shortlisted_plots)) {
-  print(shortlisted_plots[[station_name]])
+for (Station_ID in names(shortlisted_plots)) {
+  print(shortlisted_plots[[Station_ID]])
 }
 
 #__________________________________________________________________________
@@ -350,7 +350,7 @@ QA_NApc_plot <- function(df,highNA,ylim_min,ylim_max) {
     station_data <- highNA_data[highNA_data$Station_ID == Station_ID, ]
     
     # Create plot for precipitation time series
-    p <-  ggplot(station_data, aes(x = Year, y = Variable, color = Station_ID)) +
+    p <-  ggplot(station_data, aes(x = Year, y = Variable, color = Station_ID, group = 1)) +
       geom_point() +  
       geom_line() +   
       labs(title = paste("High percentage of NA in Station", Station_ID),
@@ -381,7 +381,7 @@ for (Station_ID in names(High_NA_plots)) {
 
 #_______________________________________________________________________________________
 
-##### Removal of exteme values ####
+##### Removal of extreme values ####
 ##### QA_yearly_filtering ####
 #_______________________________________________________________________________________
 QA_yearly_filtering <- function(df, variable, threshold_year, min_obs_below_threshold, min_obs_above_threshold) {
@@ -479,7 +479,7 @@ QA_reliable_stations <- function(df, variable, threshold_year, count_threshold) 
   return(filtered_stations)
 }
 
-# Calculate
+# Calculate for observation after 1990 and more than 240 (around 20 years, so more reliable)
 prec_stations <- QA_reliable_stations(prec_filtered2, Precipitation,  1990,  240)
 tempe_stations <- QA_reliable_stations(tempe_filtered2, Tmean,  1990,  240)
 
@@ -531,8 +531,8 @@ temp_points <- st_as_sf(temp_selected_points, coords = c("Latitude","Longitude")
 
 # Plot the polygon and random points
 plot(StudyArea$geometry)
-plot(prec_points,add = TRUE,  pch = 19, col = "red4")
-plot(temp_points, add = TRUE, pch = 19, col = "blue4")
+plot(st_geometry(prec_points),add = TRUE,  pch = 19, col = "red4")
+plot(st_geometry(temp_points), add = TRUE, pch = 19, col = "blue4")
 
 
 #_______________________________________________________________________________________
@@ -540,34 +540,33 @@ plot(temp_points, add = TRUE, pch = 19, col = "blue4")
 #### Assign a threshold based on selected stations #
 #### Plot a specific Station for many year for a month
 #_______________________________________________________________________________________ 
-station_name<- unique(selected_points$Station_Name)
+Station_ID<- unique(selected_points$Station_ID)
 
 # Plot Temperature for selected stations for all the months #
-plot_yearly <- function(data,variable,selected_points,ylim_min,ylim_max) {
-  # Filter data for shortlisted stations
-  selected_stations <- unique(selected_points$Station_ID)
-  selected_data <- data[data$Station_ID %in% selected_stations, ]
+QA_plot_yearly <- function(df, variable, selected_points, ylim_min, ylim_max) {
+  # Filter df for shortlisted stations
+  selected_df <- df[df$Station_ID %in% unique(selected_points$Station_ID), ]
   
-  # Plot time series for each shortlisted station
-  plots <- list()
-  for (Station_ID in selected_stations) 
-    p <-  ggplot(data, aes(x = Year, y = {{ variable }}, color = Station_Name)) +
+  # Plot time series for each selected stations
+  ggplot(selected_df, aes(x = Year, y = .data[[variable]], color = Station_ID)) +
     geom_point() +  # Plot points
     geom_line() +   # Connect points with lines
-    labs(title = paste({{ variable }}, " by Month"),
-         x = "Year", y = "{{ variable }}") +
+    labs(title = paste(variable, "by Month"),
+         x = "Year", y = variable) +
     theme_minimal() +  # Minimal theme
-    facet_wrap(~Month, scales = "free_y")+
-    coord_cartesian(ylim = c({{ ylim_min }},{{ ylim_max }}))
-  plots[[Station_ID]] <- p
+    facet_wrap(~Month, scales = "free_y") +
+    coord_cartesian(ylim = c(ylim_min, ylim_max))
 }
-return(plots)
-}
-####################ERROR!!!
 
-######### more work
-plot_yearly(tempe_filtered%>%
-                   filter(Station_Name %in% "Alcanar" & Year > 2000), Tmean.C, -10,35)
+# Generate plots for reliable stations
+QA_plot_yearly(prec_filtered2,"Precipitation",prec_selected_points,0,500)
+QA_plot_yearly(tempe_filtered2,"Tmean",temp_selected_points,-10,30)
+
+
+# Print individual plots
+for (Station_ID in names(Threshold_plots)) {
+  print(Threshold_plots[[Station_ID]])
+}
 
 #___________________________________________________________________________________________________________________________________________
 
@@ -577,17 +576,17 @@ plot_yearly(tempe_filtered%>%
 # Filter out stations and months where the range exceeds 10 degrees Celsius
 errorsT  <- tempe_statistics_filtered%>%
   filter(Range >= 10)%>%
-  select(Station_Name)%>%
+  select(Station_ID)%>%
   distinct()
-station_name<- unique(sort(errorsT$Station_Name))
+Station_ID<- unique(sort(errorsT$Station_ID))
 
 # Create groups to check easier
-station_groups <- split(unique(station_name), ceiling(seq_along(station_name)/4))
+station_groups <- split(unique(Station_ID), ceiling(seq_along(Station_ID)/4))
 
 # Plotting specific stations for outlier detection
 plot_outlier_detection <- function(data, station_groups) {
   plots <- lapply(station_groups, function(group) {
-    plot_temperature(data %>% filter(Station_Name %in% group  & Year > 1990))
+    plot_temperature(data %>% filter(Station_ID %in% group  & Year > 1990))
   })
   return(plots)
 }
