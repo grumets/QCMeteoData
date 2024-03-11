@@ -43,7 +43,7 @@ StudyArea <- st_read("C:/Users/e.trypidaki/OneDrive - CREAF/Escritorio/Data/Ebro
 read_weather_data <- function(csv_files) {
   data <- lapply(csv_files, function(csv_file) {
     df <- read.csv(csv_file)
-    df$Station_ID <- as.character(df$Station_ID)
+    df$Station_ID <- as.character(df$Station_Name)
     df$Source <- basename(csv_file)
     df$Year <- as.numeric(df$Year)
     df <- select(df,"Station_ID","Year","Month","Station_Altitude","Precipitacion.mm",
@@ -420,7 +420,7 @@ QA_outlier_precipitation <- function(df, variable,threshold) {
 }
 # Calculate
 prec_filtered2 <- QA_outlier_precipitation (prec_filtered ,Precipitation,1500)
-# Create a dataset containing removed values
+# Create a data set containing removed values
 removed_valuesP <- anti_join(prec_filtered, prec_filtered2)
 
 ### Function to delete extreme values of temperature ##
@@ -445,6 +445,7 @@ QA_outlier_temperature <- function(df, Tmean_variable, Tmax_variable, Tmin_varia
   return(filtered_temperature)
 }
 ####MORE WORK HERE!! maybe can be simpler??
+
 # Calculate
 tempe_filtered2 <- QA_outlier_temperature(tempe_filtered ,"Tmean", "Tmax","Tmin", -20,45)
 # Create a data set containing removed values
@@ -533,8 +534,6 @@ plot(st_geometry(temp_points), add = TRUE, pch = 19, col = "blue4")
 #### Assign a threshold based on selected stations #
 #### Plot a specific Station for many year for a month
 #_______________________________________________________________________________________ 
-Station_ID<- unique(selected_points$Station_ID)
-
 # Plot Temperature for selected stations for all the months #
 QA_plot_yearly <- function(df, variable, selected_points, ylim_min, ylim_max) {
   # Filter df for shortlisted stations
@@ -577,37 +576,56 @@ outliersT <- QA_outlier_shortlist(tempe_statistics_filtered,10)
 ##Export results in a report
 export_report(outliersT,  "outliers_temperature_report.txt", "outliers_temperature_report.xlsx")
 
-#### Buffer around each suspicious station
-#####ONE BY ONE
-# Function to select stations within the buffer zone
-stations_in_buffer <- function(outlier_stations, all_stations_sf, buffer_distance) {
+####Function to buffer around each suspicious station
+stations_in_buffer <- function(outlier_stations_sf, all_stations,variable, initial_buffer_distance) {
+  # Convert all_stations to sf object
+  all_stations <- QA_reliable_stations(all_stations, {{ variable}}, 1950,  120) %>% 
+    ### Needs to include stations with many observation in order to compare
+    select(Station_ID, Longitude, Latitude) %>%
+    distinct()
+  all_stations_sf <- st_as_sf(all_stations, coords = c("Longitude", "Latitude"), crs = 25830)
+  
   # Create an empty list to store stations within buffer for each outlier station
-  stations_within_buffer <- list()
+  stations_within_buffer <- vector("list", length = nrow(outlier_stations_sf))
   
   # Iterate over each outlier station
-  for (i in 1:nrow(outlier_stations)) {
+  for (i in 1:nrow(outlier_stations_sf)) {
     # Get the ID of the current outlier station
-    outlier_id <- outlier_stations$Station_ID[i]
+    outlier_id <- outlier_stations_sf$Station_ID[i]
     
     # Filter all stations to get the outlier station
-    outlier_station <- all_stations[all_stations$Station_ID == outlier_id, ]
-    outlier_station_sf <-st_as_sf(outlier_station, coords = c("Longitude", "Latitude"), crs = 25830)
+    outlier_station <- all_stations_sf[all_stations_sf$Station_ID == outlier_id, ] 
     
-    # Create a buffer around the outlier station
-    outlier_buffer <- st_buffer(outlier_station_sf, buffer_distance)
+    # Initialize buffer distance
+    buffer_distance <- initial_buffer_distance
     
-    # Find stations that intersect with the buffer
-    all_stations_sf <- st_as_sf(all_stations, coords = c("Longitude", "Latitude"), crs = 25830)
-    stations_within <- all_stations_sf[st_intersection(all_stations_sf, outlier_buffer), ]
-    
-    # Add the list of stations within buffer to the result list
-    stations_within_buffer[[i]] <- stations_within
+    # Repeat until at least 3 stations are found within the buffer
+    while (TRUE) {
+      # Create a buffer around the outlier station
+      outlier_buffer <- st_buffer(outlier_station, buffer_distance)
+      
+      # Find stations that intersect with the buffer
+      stations_within <- all_stations_sf[st_intersection(all_stations_sf, outlier_buffer), ]
+      
+      # Add the list of stations within buffer to the result list
+      stations_within_buffer[[i]] <- stations_within
+      
+      # Check if at least 3 stations are found within the buffer
+      if (nrow(stations_within) >= 3) {
+        break  # Exit the loop
+      } else {
+        # Increase the buffer distance
+        buffer_distance <- buffer_distance + 1000  # Increase by 1 km
+      }
+    }
   }
   
   return(stations_within_buffer)
 }
 
-#Calculate
-stations_per_buffer<- stations_in_buffer(outliersT,all_stations,10000)
 
-QA_plot_yearly(tempe_filtered2,"Variable",g,-10,35)
+
+#Calculate
+stations_per_buffer<- stations_in_buffer(outliersT,tempe_filtered2,"Tmean",3000)
+
+QA_plot_yearly(tempe_filtered2,"Tmean",stations_per_buffer[[1]],-10,35)
