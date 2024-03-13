@@ -39,16 +39,22 @@ StudyArea <- st_read("C:/Users/e.trypidaki/OneDrive - CREAF/Escritorio/Data/Ebro
 # List all the csv files with meteorological data
 # Select variables
 read_weather_data <- function(csv_files) {
+  # Read and process each CSV file
   data <- lapply(csv_files, function(csv_file) {
     df <- read.csv(csv_file)
     df$Station_ID <- as.character(df$Station_Name)
     df$Source <- basename(csv_file)
     df$Year <- as.numeric(df$Year)
-    df <- select(df,"Station_ID","Year","Month","Station_Altitude","Precipitacion.mm",
-                 "Tmean.C","Tmin.C","Tmax.C","X","Y","Source")
-    return(df)
+    # Select required columns
+    df <- select(df, "Station_ID", "Year", "Month", "Station_Altitude", "Precipitacion.mm",
+                 "Tmean.C", "Tmin.C", "Tmax.C", "X", "Y", "Source")
+
+    return(df)  # Return the processed dataframe
   })
+  
+  # Combine all processed dataframes into one
   data <- bind_rows(data)
+  
   return(data)
 }
 # Load meteorological data
@@ -57,7 +63,7 @@ df <- read_weather_data(csv_files)
 # Function to QA_preprocessing raw Meteodata
 QA_preprocessing <- function(raw_meteodata_df, Station_ID, Latitude, Longitude, Altitude, Precipitation, Tmean, Tmin, Tmax) {
   processed_df <- raw_meteodata_df %>%
-    rename(
+    dplyr::rename(
       Station_ID = {{ Station_ID }},
       Latitude = {{ Latitude }},
       Longitude = {{ Longitude }},
@@ -184,7 +190,7 @@ QA_serieslenght_shortlist <- function(df, variable, threshold_series_length) {
   return(quality_control_results)
 }
 
-##calculate
+##Calculate
 short_series<- QA_serieslenght_shortlist(processed_df, "Precipitation", 1)
 
 #Export report
@@ -359,6 +365,7 @@ removed_values <- anti_join(processed_df, df_wNA)
 #QA_gaps_shortlist#
 #_______________________________________________________________________________________
 rles 
+df<- processed_df
 sort_stations_with_data_gaps <- function(df, variable, threshold_gap_size) {
   # Group data by Station_ID
   grouped_data <- df %>% 
@@ -368,7 +375,7 @@ sort_stations_with_data_gaps <- function(df, variable, threshold_gap_size) {
   # Calculate the gap sizes
   gap_sizes <- grouped_data %>%
     group_by(Station_ID) %>%
-    dplyr::summarize(gap_size = max(c(0, diff(Year) * 12 + (Month - lag(Month, default = first(Month)))) - 1))
+    reframe(gap_size = max(c(0, diff(Year) * 12 + (Month - lag(Month, default = first(Month)))) - 1))
   
   # Filter stations based on the gap size threshold
   stations_with_large_gaps <- gap_sizes %>%
@@ -401,7 +408,7 @@ QA_obs_plot <- function(df, variable_name) {
   observation_count <- df %>%
     filter(!is.na(.data[[variable_name]])) %>%
     group_by(Year) %>%
-    dplyr::summarize(Station_Count = n_distinct(Station_ID))
+    reframe(Station_Count = n_distinct(Station_ID))
   
   # Plot observation count by number of stations against years
   p <- ggplot(observation_count, aes(x = Year, y = Station_Count)) +
@@ -444,7 +451,7 @@ QA_heatmap <- function(df, variable_name, min_year, max_year) {
   
   # Plot recording periods
   p <- ggplot(station_recording_periods, aes(x = Start_Date, xend = End_Date, y = Station_Number)) +
-    geom_segment(size = 1, color = "lightgreen", alpha = 0.5) +
+    geom_segment(linewidth = 1, color = "green4", alpha = 0.5) +
     labs(title = "Recording Periods of Weather Stations",
          x = "Year",
          y = "Station Number") +
