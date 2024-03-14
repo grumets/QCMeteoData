@@ -126,14 +126,20 @@ QA_plot_yearly <- function(df, variable, selected_points) {
   # Filter df for shortlisted stations
   selected_df <- df[df$Station_ID %in% unique(selected_points$Station_ID), ]
   
-  # Plot time series for each selected stations
-  ggplot(selected_df, aes(x = Year, y = .data[[variable]], color = Station_ID)) +
+  # Get unique stations with their altitudes
+  selected_df$StationID_Altitude <- paste(selected_df$Station_ID, ",", selected_df$Altitude,"m")
+  
+  # Plot time series for each selected station
+  p <- ggplot(selected_df, aes(x = Year, y = .data[[variable]], color = StationID_Altitude)) +
     geom_point() +  # Plot points
     geom_line() +   # Connect points with lines
     labs(title = paste(variable, "by Month"),
-         x = "Year", y = variable) +
+         x = "Year", y = variable,
+         color = "StationID_Altitude") +
     theme_minimal() +  # Minimal theme
     facet_wrap(~Month, scales = "free_y") 
+  
+  return(p)
 }
 
 #_______________________________________________________________________________________
@@ -425,7 +431,7 @@ QA_heatmap <- function(df, variable_name, min_year, max_year) {
 
 # Call the function to create the plot
 QA_heatmap(processed_df,"Precipitation",1990,2024)
-QA_heatmap(processed_df,"Tmean")
+QA_heatmap(processed_df,"Tmean",1990,2024)
 
 ### Large data gaps####
 #QA_gaps_shortlist#
@@ -538,7 +544,6 @@ df_wGAPS <- QA_gaps_clean(processed_df,stations_to_removeP)
 
 # Create a data set containing removed values
 removed_values <- anti_join(processed_df, df_wGAPS )
-
 
 #_______________________________________________________________________________________
 ### Filtering by observation before 2000 and after 2000 #####
@@ -789,7 +794,7 @@ stations_per_bufferT<- stations_in_buffer(outliersT,tempe_filtered2,"Tmean",3000
 buffer_plotsT <- list()
 for (i in seq_along(stations_per_bufferT)) {
   # Generate plot for the current buffer zone
-  plot <- QA_plot_yearly(tempe_filtered2, "Tmean", stations_per_buffer[[i]])
+  plot <- QA_plot_yearly(tempe_filtered2, "Tmean", stations_per_bufferT[[i]])
   buffer_plotsT[[i]] <- plot
 }
 
