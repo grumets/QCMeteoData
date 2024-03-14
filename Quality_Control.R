@@ -45,6 +45,7 @@ read_weather_data <- function(csv_files) {
     df$Station_ID <- as.character(df$Station_Name)
     df$Source <- basename(csv_file)
     df$Year <- as.numeric(df$Year)
+    df$Month <- as.numeric(df$Month)
     # Select required columns
     df <- select(df, "Station_ID", "Year", "Month", "Station_Altitude", "Precipitacion.mm",
                  "Tmean.C", "Tmin.C", "Tmax.C", "X", "Y", "Source")
@@ -361,45 +362,6 @@ removed_values <- anti_join(processed_df, df_wNA)
 
 
 #_______________________________________________________________________________________
-### Large data gaps####
-#QA_gaps_shortlist#
-#_______________________________________________________________________________________
-rles 
-df<- processed_df
-sort_stations_with_data_gaps <- function(df, variable, threshold_gap_size) {
-  # Group data by Station_ID
-  grouped_data <- df %>% 
-    group_by(Station_ID) %>%
-    arrange(Year, Month)  # Arrange by Year and Month
-  
-  # Calculate the gap sizes
-  gap_sizes <- grouped_data %>%
-    group_by(Station_ID) %>%
-    reframe(gap_size = max(c(0, diff(Year) * 12 + (Month - lag(Month, default = first(Month)))) - 1))
-  
-  # Filter stations based on the gap size threshold
-  stations_with_large_gaps <- gap_sizes %>%
-    filter(gap_size > threshold_gap_size) %>%
-    pull(Station_ID)
-  
-  return(stations_with_large_gaps)
-}
-# Example usage
-stations_with_large_gaps <- sort_stations_with_data_gaps(processed_df, "Precipitation", 3)
-
-#_______________________________________________________________________________________
-#QA_gaps_plot#
-#_______________________________________________________________________________________
-
-
-#_______________________________________________________________________________________
-#QA_gaps_clean#
-#_______________________________________________________________________________________
-
-
-
-
-#_______________________________________________________________________________________
 ### QA_plots for station count and time periods ####
 #_______________________________________________________________________________________
 # Function to plot observation count by number of stations against years
@@ -438,7 +400,7 @@ QA_heatmap <- function(df, variable_name, min_year, max_year) {
   # Give numeric value to Station_ID
   df_with_station_number <- df_filtered %>%
     distinct(Station_ID) %>%
-    mutate(Station_Number = row_number())
+    dplyr::mutate(Station_Number = row_number())
   
   # Join Station numbers back to the original dataframe
   df_filtered <- df_filtered %>%
@@ -447,7 +409,7 @@ QA_heatmap <- function(df, variable_name, min_year, max_year) {
   # Group data by Station_Number and calculate recording period
   station_recording_periods <- df_filtered %>%
     group_by(Station_Number) %>%
-    reframe(Start_Date = min(Year), End_Date = max(Year))
+    dplyr::reframe(Start_Date = min(Year), End_Date = max(Year))
   
   # Plot recording periods
   p <- ggplot(station_recording_periods, aes(x = Start_Date, xend = End_Date, y = Station_Number)) +
@@ -464,6 +426,118 @@ QA_heatmap <- function(df, variable_name, min_year, max_year) {
 # Call the function to create the plot
 QA_heatmap(processed_df,"Precipitation",1990,2024)
 QA_heatmap(processed_df,"Tmean")
+
+### Large data gaps####
+#QA_gaps_shortlist#
+#_______________________________________________________________________________________
+QA_gaps_shortlist <- function(df, variable, threshold_days) {
+  # Initialize an empty dataframe to store gaps
+  gaps <- data.frame(Station_ID = character(), 
+                     Start_Date = character(),
+                     End_Date = character(),
+                     YYYYMMdate = as.Date(character()),
+                     Days_gaps = integer(),
+                     stringsAsFactors = FALSE)
+  
+  # Iterate over unique station names
+  unique_stations <- unique(df$Station_ID)
+  for (Station_ID in unique_stations) {
+    # Subset data for the current station
+    subset_data <- df[df$Station_ID == Station_ID, ]
+    
+    # Filter data to specific variable
+    subset_data <- subset_data %>% filter(!is.na(.data[[variable]]))
+    
+    # Check if there are valid dates for the variable
+    if (any(!is.na(subset_data$YYYYMMdate))) {
+      subset_data$YYYYMMdate <- as.Date(subset_data$YYYYMMdate)
+      
+      # Calculate daily differences
+      subset_data$Days_gaps <- c(0, diff(subset_data$YYYYMMdate))
+      
+      # Find gaps larger than threshold 
+      gaps <- rbind(gaps, subset_data[subset_data$Days_gaps > threshold_days, c("Station_ID", "Start_Date", "End_Date","YYYYMMdate","Days_gaps")])
+    }
+  }
+  
+  return(gaps)
+}
+
+# Calculate gaps larger than 8 months
+gaps_series <- QA_gaps_shortlist(processed_df, "Precipitation", 250)
+
+#Export report
+export_report(gaps_series,  "gaps_series_report.txt", "gaps_series_report.xlsx")
+
+#_______________________________________________________________________________________
+#QA_gaps_plot#
+#_______________________________________________________________________________________
+gaps <- processed_df[processed_df$Station_ID %in% unique(gaps_series$Station_ID), ]
+
+## One way to plot all of them together
+QA_heatmap(gaps,"Precipitation",1950,2024)
+
+## Second way to plot individually
+QA_plot_gaps <- function(df, variable_name) {
+  # Filter out rows with missing variable values
+  df_filtered <- df %>%
+    filter(!is.na(.data[[variable_name]]))
+  
+  # Group data by Station_Number and calculate recording period
+  station_recording_periods <- df_filtered %>%
+    group_by(Station_ID) %>%
+    summarise(Start_Date = min(Year), End_Date = max(Year))
+  
+  # Loop through each station and create individual heatmaps
+  heatmap_plots <- list()
+  for (station_id in station_recording_periods$Station_ID) {
+    station_data <- df_filtered[df_filtered$Station_ID == station_id, ]
+    
+    # Create heatmap for the current station
+    heatmap_plot <- ggplot(station_data, aes(x = Month , y =Year , fill = .data[[variable_name]])) +
+      geom_tile() +
+      scale_fill_gradient(low = "lightblue3", high = "dodgerblue4") +
+      labs(title = paste("Time series of", variable_name, "for Station", station_id),
+           y = "Year",
+           x = "Month",
+           fill = variable_name) +
+      theme_minimal()
+    
+    heatmap_plots[[station_id]] <- heatmap_plot
+  }
+  
+  return(heatmap_plots)
+}
+
+##Subset to the stations with gaps
+gaps_df <- processed_df[processed_df$Station_ID %in% unique(gaps_series$Station_ID), ]
+
+##Plot list
+gap_plots_list <- QA_plot_gaps(gaps_df, "Precipitation")
+
+# Print individual heatmaps
+for (i in 1:length(gap_plots_list)) {
+  print(gap_plots_list[[i]])
+}
+
+#_______________________________________________________________________________________
+#QA_gaps_clean#
+#_______________________________________________________________________________________
+QA_gaps_clean <- function(df, stations_to_remove) {
+  # Filter out rows corresponding to the specified stations
+  cleaned_df <- df[!df$Station_ID %in% stations_to_remove, ]
+  
+  return(cleaned_df)
+}
+
+#Calculate
+stations_to_removeP <- c("303","9660","307")
+
+#Calculate df with short series
+df_wGAPS <- QA_gaps_clean(processed_df,stations_to_removeP)
+
+# Create a data set containing removed values
+removed_values <- anti_join(processed_df, df_wGAPS )
 
 
 #_______________________________________________________________________________________
