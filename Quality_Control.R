@@ -718,10 +718,9 @@ QA_plot_yearly(prec_filtered2,"Precipitation",prec_selected_points)
 QA_plot_yearly(tempe_filtered2,"Tmean",temp_selected_points)
 
 #___________________________________________________________________________________________________________________________________________
-
-### Outliers shortlists ###########
+### Outliers shortlists #####
+### QA_outlier_shortlist#
 #___________________________________________________________________________________________________________________________________________# Select a specific station with many observations
-## For temperature
 QA_outlier_shortlist <- function(df_statistics, Range_threshold) {
   # Filter out stations, which monthly range exceeds 10 degrees Celsius
   outliers <- df_statistics %>%
@@ -740,14 +739,20 @@ outliersP <- QA_outlier_shortlist(prec_statistics_filtered,700)
 export_report(outliersT,  "Outliers_temperature_report.txt", "Outliers_temperature_report.xlsx")
 export_report(outliersP,  "Outliers_precipitation_report.txt", "Outliers_precipitation_report.xlsx")
 
-####Function to buffer around each suspicious station
-###COULD BE IMPORVED
-stations_in_buffer <- function(outlier_stations_sf, all_stations,variable, initial_buffer_distance) {
+#___________________________________________________________________________________________________________________________________________
+### QA_outlier_plots#
+#___________________________________________________________________________________________________________________________________________# Select a specific station with many observations
+## Function to buffer around each suspicious station
+# Distance in meters
+#_____QA_buffer_stations_______
+QA_buffer_stations <- function(outlier_stations_sf, all_stations,variable, initial_buffer_distance) {
+  
   # Convert all_stations to sf object
-  all_stations <- QA_reliable_stations(all_stations, {{ variable}}, 1990,  120) %>% 
-    ### Needs to include stations with many observation in order to compare
-    select(Station_ID, Longitude, Latitude) %>%
-    distinct()
+  all_stations <- all_stations %>% 
+  select(Station_ID, Longitude, Latitude) %>%
+  distinct()
+  
+  #Transform to sf obj
   all_stations_sf <- st_as_sf(all_stations, coords = c("Longitude", "Latitude"), crs = 25830)
   
   # Create an empty list to store stations within buffer for each outlier station
@@ -755,11 +760,9 @@ stations_in_buffer <- function(outlier_stations_sf, all_stations,variable, initi
   
   # Iterate over each outlier station
   for (i in 1:nrow(outlier_stations_sf)) {
-    # Get the ID of the current outlier station
+    # Filter to the buffer area for the outlier stations
     outlier_id <- outlier_stations_sf$Station_ID[i]
-    # Filter all stations to get the outlier station
     outlier_station <- all_stations_sf[all_stations_sf$Station_ID == outlier_id, ] 
-    # Initialize buffer distance
     buffer_distance <- initial_buffer_distance
     
     # Repeat until at least 3 stations are found within the buffer
@@ -777,7 +780,7 @@ stations_in_buffer <- function(outlier_stations_sf, all_stations,variable, initi
         break  # Exit the loop
       } else {
         # Increase the buffer distance
-        buffer_distance <- buffer_distance + 5000  # Increase by 5 km
+        buffer_distance <- buffer_distance + 500  # Increase by 500 m
       }
     }
   }
@@ -785,10 +788,8 @@ stations_in_buffer <- function(outlier_stations_sf, all_stations,variable, initi
   return(stations_within_buffer)
 }
 
-
-
 #Calculate temperature
-stations_per_bufferT<- stations_in_buffer(outliersT,tempe_filtered2,"Tmean",3000) #Distance in meters
+stations_per_bufferT<- QA_buffer_stations(outliersT,tempe_filtered2,"Tmean",500) 
 
 # List to store plots for each buffer zone
 buffer_plotsT <- list()
@@ -798,15 +799,95 @@ for (i in seq_along(stations_per_bufferT)) {
   buffer_plotsT[[i]] <- plot
 }
 
-
 #Calculate precipitation
-## Takes a lot of time to calculate
-stations_per_bufferP<- stations_in_buffer(outliersP,prec_filtered2,"Precipitation",50000)
+stations_per_bufferP<- QA_buffer_stations(outliersP,prec_filtered2,"Precipitation",2000)
 
 # List to store plots for each buffer zone
 buffer_plotsP <- list()
 for (i in seq_along(stations_per_bufferP)) {
   # Generate plot for the current buffer zone
-  plot <- QA_plot_yearly(prec_filtered2, "Precipitation", stations_per_buffer[[i]])
+  plot <- QA_plot_yearly(prec_filtered2, "Precipitation", stations_per_bufferP[[i]])
   buffer_plotsP[[i]] <- plot
+}
+
+## Function to find stations with similar altitude for each suspicious station
+# Altitude in meters
+#___QA_altitude_stations_________
+
+QA_altitude_stations <- function(df, outliers_df) {
+  # Filter out rows with NA values in the Altitude column
+  df_unique <- df[!is.na(df$Altitude), ]
+  
+  # Arrange by Altitude
+  df_unique <- df_unique %>%
+    select("Station_ID", "Longitude", "Latitude", "Altitude") %>%
+    distinct() %>%
+    arrange(Altitude)
+  
+  # Dataframe with unique outliers Stations
+  outlier_stations <- unique(outliers_df$Station_ID)
+  
+  # Create empty list
+  station_results <- list()
+  
+  # Iterate over each outlier station
+  for (station_id in outlier_stations) {
+    # Find the index of the outlier station
+    outlier_index <- which(df_unique$Station_ID == station_id)
+    
+    # If the outlier station is the first or last station, set above and below stations to NA
+    if (outlier_index == 1) {
+      above_station <- NA
+      below_station <- df_unique$Station_ID[outlier_index + 1]
+    } else if (outlier_index == nrow(df_unique)) {
+      above_station <- df_unique$Station_ID[outlier_index - 1]
+      below_station <- NA
+    } else {
+      # Otherwise, set the above and below stations
+      above_station <- df_unique$Station_ID[outlier_index - 1]
+      below_station <- df_unique$Station_ID[outlier_index + 1]
+    }
+    # Match with info from original df
+    above_station_df <- df_unique[df_unique$Station_ID == above_station,]
+    below_station_df <- df_unique[df_unique$Station_ID == below_station,]
+    outlier_station_df <- df_unique[df_unique$Station_ID == station_id,]
+    # Store the results in the list
+    result <- data.frame(
+      Station_ID = c(above_station_df$Station_ID, outlier_station_df$Station_ID, below_station_df$Station_ID),
+      Longitude = c(above_station_df$Longitude, outlier_station_df$Longitude, below_station_df$Longitude),
+      Latitude = c(above_station_df$Latitude, outlier_station_df$Latitude, below_station_df$Latitude),
+      Altitude = c(above_station_df$Altitude, outlier_station_df$Altitude, below_station_df$Altitude)
+    )
+    rownames(result) <- NULL  # Reset row names
+    station_results[[station_id]] <- result
+  }
+  
+  return(station_results)
+}
+
+# Call the function with your dataframes
+stations_per_altitP <- QA_altitude_stations(prec_filtered, outliersP)
+
+# List to store plots for each outlier
+altitude_plotsP <- list()
+for (i in seq_along(stations_per_altitP)) {
+  # Generate plot for the current buffer zone
+  plot <- QA_plot_yearly(prec_filtered2, "Precipitation", Altitude_Precipitation[[i]])
+  altitude_plotsP[[i]] <- plot
+}
+
+
+
+
+
+
+
+
+
+# List to store plots for each buffer zone
+altitude_plotsP <- list()
+for (i in seq_along(station_results)) {
+  # Generate plot for the current buffer zone
+  plot <- QA_plot_yearly(prec_filtered2, "Precipitation", station_results[[i]])
+  altitude_plotsP[[i]] <- plot
 }
