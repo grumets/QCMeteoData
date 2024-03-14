@@ -142,6 +142,38 @@ QA_plot_yearly <- function(df, variable, selected_points) {
   return(p)
 }
 
+# Function to plot monthly for selected stations with mean and 2SD
+QA_plot_yearly_meansd <- function(df, variable, selected_points) {
+  # Filter df for shortlisted stations
+  selected_df <- df[df$Station_ID %in% unique(selected_points$Station_ID), ]
+  
+  # Calculate mean and 2 SD
+  mean_value <- mean(selected_df[[variable]], na.rm = TRUE)
+  sd_value <- sd(selected_df[[variable]], na.rm = TRUE)
+  upper_sd <- mean_value + 2 * sd_value
+  lower_sd <- mean_value - 2 * sd_value
+  
+  # Get unique stations with their altitudes
+  selected_df$StationID_Altitude <- paste(selected_df$Station_ID, ",", selected_df$Altitude,"m")
+  
+  # Plot time series for each selected station
+  p <- ggplot(selected_df, aes(x = Year, y = .data[[variable]], color = StationID_Altitude)) +
+    geom_point() +  # Plot points
+    geom_line() +   # Connect points with lines
+    geom_hline(yintercept = mean_value, linetype = "dashed", color = "red4") +  # Add mean line
+    geom_hline(yintercept = upper_sd, linetype = "dashed", color = "blue4") +   # Add upper 2 SD line
+    geom_hline(yintercept = lower_sd, linetype = "dashed", color = "blue4") +   # Add lower 2 SD line
+    labs(title = paste(variable, "by Month"),
+         x = "Year", y = variable,
+         color = "StationID_Altitude") +
+    theme_minimal() +  # Minimal theme
+    facet_wrap(~Month, scales = "free_y") +
+    ylim(min(lower_sd, min(selected_df[[variable]], na.rm = TRUE)), 
+         max(upper_sd, max(selected_df[[variable]], na.rm = TRUE)))  # Set constant y-range
+  
+  return(p)
+}
+
 #_______________________________________________________________________________________
 ### Length of the time series####
 ### QA_serieslenght_shortlist #
@@ -481,7 +513,7 @@ export_report(gaps_series,  "gaps_series_report.txt", "gaps_series_report.xlsx")
 gaps <- processed_df[processed_df$Station_ID %in% unique(gaps_series$Station_ID), ]
 
 ## One way to plot all of them together
-QA_heatmap(gaps,"Precipitation",1950,2024)
+QA_heatmap(gaps,"Precipitation",2015,2024)
 
 ## Second way to plot individually
 QA_plot_gaps <- function(df, variable_name) {
@@ -717,6 +749,13 @@ plot(st_geometry(temp_points), add = TRUE, pch = 19, col = "blue4")
 QA_plot_yearly(prec_filtered2,"Precipitation",prec_selected_points)
 QA_plot_yearly(tempe_filtered2,"Tmean",temp_selected_points)
 
+# Generate plots for reliable stations
+QA_plot_yearly_meansd(prec_filtered2,"Precipitation",prec_selected_points)
+QA_plot_yearly_meansd(tempe_filtered2,"Tmean",temp_selected_points)
+
+## Range for temperature max 5 degrees for one stations and for many 10
+## Range for precipitation around 200 and max 4SD
+## General trend
 #___________________________________________________________________________________________________________________________________________
 ### Outliers shortlists #####
 ### QA_outlier_shortlist#
@@ -733,7 +772,7 @@ QA_outlier_shortlist <- function(df_statistics, Range_threshold) {
 
 #Calculate
 outliersT <- QA_outlier_shortlist(tempe_statistics_filtered,10)
-outliersP <- QA_outlier_shortlist(prec_statistics_filtered,700)
+outliersP <- QA_outlier_shortlist(prec_statistics_filtered,500)
 
 ##Export results in a report
 export_report(outliersT,  "Outliers_temperature_report.txt", "Outliers_temperature_report.xlsx")
@@ -745,23 +784,25 @@ export_report(outliersP,  "Outliers_precipitation_report.txt", "Outliers_precipi
 ## Function to buffer around each suspicious station
 # Distance in meters
 #_____QA_buffer_stations_______
-QA_buffer_stations <- function(outlier_stations_sf, all_stations,variable, initial_buffer_distance) {
+QA_buffer_stations  <- function(outlier_stations_sf, all_stations, variable, initial_buffer_distance) {
   
   # Convert all_stations to sf object
   all_stations <- all_stations %>% 
-  select(Station_ID, Longitude, Latitude) %>%
-  distinct()
+    select(Station_ID, Longitude, Latitude) %>%
+    distinct()
   
-  #Transform to sf obj
+  # Transform to sf obj
   all_stations_sf <- st_as_sf(all_stations, coords = c("Longitude", "Latitude"), crs = 25830)
   
-  # Create an empty list to store stations within buffer for each outlier station
-  stations_within_buffer <- vector("list", length = nrow(outlier_stations_sf))
+  # Get unique outlier station IDs
+  unique_outlier_ids <- unique(outlier_stations_sf$Station_ID)
   
-  # Iterate over each outlier station
-  for (i in 1:nrow(outlier_stations_sf)) {
-    # Filter to the buffer area for the outlier stations
-    outlier_id <- outlier_stations_sf$Station_ID[i]
+  # Create an empty list to store stations within buffer for each outlier station
+  stations_within_buffer <- vector("list", length = length(unique_outlier_ids))
+  
+  # Iterate over each unique outlier station ID
+  for (i in seq_along(unique_outlier_ids)) {
+    outlier_id <- unique_outlier_ids[i]
     outlier_station <- all_stations_sf[all_stations_sf$Station_ID == outlier_id, ] 
     buffer_distance <- initial_buffer_distance
     
@@ -772,6 +813,7 @@ QA_buffer_stations <- function(outlier_stations_sf, all_stations,variable, initi
       
       # Find stations that intersect with the buffer
       stations_within <- all_stations_sf[st_intersection(all_stations_sf, outlier_buffer), ]
+      
       # Add the list of stations within buffer to the result list
       stations_within_buffer[[i]] <- stations_within
       
@@ -866,28 +908,33 @@ QA_altitude_stations <- function(df, outliers_df) {
 }
 
 # Call the function with your dataframes
-stations_per_altitP <- QA_altitude_stations(prec_filtered, outliersP)
+stations_per_altitP <- QA_altitude_stations(prec_filtered2, outliersP)
 
 # List to store plots for each outlier
 altitude_plotsP <- list()
 for (i in seq_along(stations_per_altitP)) {
   # Generate plot for the current buffer zone
-  plot <- QA_plot_yearly(prec_filtered2, "Precipitation", Altitude_Precipitation[[i]])
+  plot <- QA_plot_yearly(prec_filtered2, "Precipitation", stations_per_altitP[[i]])
   altitude_plotsP[[i]] <- plot
 }
 
+#___________________________________________________________________________________________________________________________________________
+### QA_outlier_clean#
+#___________________________________________________________________________________________________________________________________________# Select a specific station with many observations
 
-
-
-
-
-
-
-
-# List to store plots for each buffer zone
-altitude_plotsP <- list()
-for (i in seq_along(station_results)) {
-  # Generate plot for the current buffer zone
-  plot <- QA_plot_yearly(prec_filtered2, "Precipitation", station_results[[i]])
-  altitude_plotsP[[i]] <- plot
+QA_outlier_clean <- function(df, outlier_station_ID, variable, outlier_date) {
+  # Select measurements that are going to be removed
+  outlier_data <- df[df$Station_ID == outlier_station_ID 
+                     & df$YYYYMMdate == outlier_date, c("Station_ID", "YYYYMMdate")]
+  
+  # Set the values of the variable to NA
+  df[df$Station_ID == outlier_station_ID & df$YYYYMMdate == outlier_date, variable] <- NA
+  
+  # Return the dataframe with removed outliers and the outlier data
+  return(df)
+    
 }
+
+# Clean the meteo dataframe
+cleaned_df <- QA_outlier_clean(prec_filtered2, "1088C", "Precipitation", "2020-10-15")
+
