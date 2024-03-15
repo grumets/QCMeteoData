@@ -21,13 +21,15 @@ library(ggplot2)
 library(lubridate)
 library(tidyr)
 library(openxlsx)
-
+f
 
 #Set working Directory
 setwd("XXXXX")
+setwd("C:\\Users\\e.trypidaki\\OneDrive - CREAF\\Escritorio\\Data\\Quality_Control")
 
 #Load meteorological stations data
 csv_directory <- "XXXXX"
+csv_directory <- "C:/Users/e.trypidaki/OneDrive - CREAF/Escritorio/Data/FirstClean/"
 csv_files <- list.files(csv_directory,pattern = "\\.csv$", full.names = TRUE)
 
 #Load study Area
