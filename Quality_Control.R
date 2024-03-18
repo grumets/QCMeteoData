@@ -454,7 +454,7 @@ QA_heatmap <- function(df, variable_name, min_year, max_year) {
   
   # Plot recording periods
   p <- ggplot(station_recording_periods, aes(x = Start_Date, xend = End_Date, y = Station_Number)) +
-    geom_segment(linewidth = 1, color = "green4", alpha = 0.5) +
+    geom_segment(linewidth = 1, color = "dodgerblue3", alpha = 0.5) +
     labs(title = "Recording Periods of Weather Stations",
          x = "Year",
          y = "Station Number") +
@@ -492,6 +492,9 @@ QA_gaps_shortlist <- function(df, variable, threshold_days) {
     # Check if there are valid dates for the variable
     if (any(!is.na(subset_data$YYYYMMdate))) {
       subset_data$YYYYMMdate <- as.Date(subset_data$YYYYMMdate)
+      
+      #arrange so it count from the first date of data
+      subset_data <- arrange(subset_data, YYYYMMdate)
       
       # Calculate daily differences
       subset_data$Days_gaps <- c(0, diff(subset_data$YYYYMMdate))
