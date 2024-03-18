@@ -646,29 +646,40 @@ removed_valuesP <- anti_join(cleaned_df4, cleaned_df5)
 export_report(removed_valuesP,  "Extreme_precipitation_values.txt", "Extreme_precipitation_values.xlsx")
 
 ### Function to delete extreme values of temperature ##
-QA_outlier_temperature <- function(df, Tmean_variable, Tmax_variable, Tmin_variable, temp_min, temp_max) {
-  filtered_temperature <- df %>%
-    filter(
-      # Check if Tmean is within the specified range
-      is.na(.data[[Tmean_variable]]) | 
-        (.data[[Tmean_variable]] > temp_min & .data[[Tmean_variable]] < temp_max),
-      
-      # Check if Tmin is within the specified range or if it's missing
-      is.na(.data[[Tmin_variable]]) | 
-        .data[[Tmin_variable]] == 0 | 
-        (.data[[Tmean_variable]] >= .data[[Tmin_variable]]),
-      
-      # Check if Tmax is within the specified range or if it's missing
-      is.na(.data[[Tmax_variable]])  | 
-        .data[[Tmax_variable]] == 0 |
-        (.data[[Tmean_variable]] <= .data[[Tmax_variable]])
-    )
+QA_outlier_temperature <- function(df, Tmean_variable, Tmax_variable = NULL, Tmin_variable = NULL, temp_min, temp_max) {
+  # Check if Tmax_variable and Tmin_variable are provided
+  if (is.null(Tmax_variable) && is.null(Tmin_variable)) {
+    # Filter only based on Tmean_variable
+    filtered_temperature <- df %>%
+      filter(
+        is.na(.data[[Tmean_variable]]) | 
+          (.data[[Tmean_variable]] > temp_min & .data[[Tmean_variable]] < temp_max)
+      )
+  } else {
+    # Filter based on all three variables
+    filtered_temperature <- df %>%
+      filter(
+        # Check if Tmean is within the specified range
+        is.na(.data[[Tmean_variable]]) | 
+          (.data[[Tmean_variable]] > temp_min & .data[[Tmean_variable]] < temp_max),
+        
+        # Check if Tmin is within the specified range or if it's missing
+        is.na(.data[[Tmin_variable]]) | 
+          .data[[Tmin_variable]] == 0 | 
+          (.data[[Tmean_variable]] >= .data[[Tmin_variable]]),
+        
+        # Check if Tmax is within the specified range or if it's missing
+        is.na(.data[[Tmax_variable]])  | 
+          .data[[Tmax_variable]] == 0 |
+          (.data[[Tmean_variable]] <= .data[[Tmax_variable]])
+      )
+  }
   
   return(filtered_temperature)
 }
 
 # Calculate for Temperature
-tempe_filtered2 <- QA_outlier_temperature(tempe_filtered ,"Tmean", "Tmax","Tmin",-20,45)
+tempe_filtered2 <- QA_outlier_temperature(tempe_filtered ,"Tmean", "Tmax","Tmin",-15,40)
 
 # Create a data set containing removed values
 removed_valuesT <- anti_join(tempe_filtered, tempe_filtered2)
