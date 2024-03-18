@@ -64,12 +64,12 @@ read_weather_data <- function(csv_files) {
 df <- read_weather_data(csv_files)
 
 # Function to QA_preprocessing raw Meteodata
-QA_preprocessing <- function(raw_meteodata_df, Station_ID, Latitude, Longitude, Altitude, Precipitation, Tmean, Tmin, Tmax) {
+QA_preprocessing <- function(raw_meteodata_df, Station_ID,Longitude, Latitude,  Altitude, Precipitation, Tmean, Tmin, Tmax) {
   processed_df <- raw_meteodata_df %>%
     dplyr::rename(
       Station_ID = {{ Station_ID }},
-      Latitude = {{ Latitude }},
       Longitude = {{ Longitude }},
+      Latitude = {{ Latitude }},
       Altitude = {{ Altitude }},
       Precipitation = {{ Precipitation }},
       Tmean = {{ Tmean }},
@@ -598,12 +598,12 @@ cleaned_df4 <- QA_yearly_filtering(cleaned_df3, Precipitation,  2000, 5, 1)
 tempe_filtered  <- QA_yearly_filtering(processed_df,  Tmean, 2000, 5, 1)
 
 # Create a data set containing removed values
-removed_extreme_valuesP <- anti_join(cleaned_df3,cleaned_df4)
-removed_extreme_valuesT <- anti_join(processed_df, tempe_filtered)
+removed_valuesP <- anti_join(cleaned_df3,cleaned_df4)
+removed_valuesT <- anti_join(processed_df, tempe_filtered)
 
 # Check removed values
-removed_extreme_valuesP
-removed_extreme_valuesT
+removed_valuesP
+removed_valuesT
 
 
 #_______________________________________________________________________________________
@@ -743,8 +743,8 @@ temp_selected_points <- QA_Stations_sampling(tempe_stations)
 prec_selected_points <- QA_Stations_sampling(prec_stations)
 
 ###Transform to st obj
-prec_points <- st_as_sf(prec_selected_points, coords = c( "Latitude","Longitude"), crs = 25830)
-temp_points <- st_as_sf(temp_selected_points, coords = c("Latitude","Longitude"), crs = 25830)
+prec_points <- st_as_sf(prec_selected_points, coords = c( "Longitude","Latitude"), crs = 25830)
+temp_points <- st_as_sf(temp_selected_points, coords = c("Longitude","Latitude"), crs = 25830)
 
 # Plot the polygon and random points
 plot(StudyArea$geometry)
