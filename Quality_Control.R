@@ -21,14 +21,14 @@ library(ggplot2)
 library(lubridate)
 library(tidyr)
 library(openxlsx)
-f
+
 
 #Set working Directory
-setwd("XXXXX")
+#setwd("XXXXX")
 setwd("C:\\Users\\e.trypidaki\\OneDrive - CREAF\\Escritorio\\Data\\Quality_Control")
 
 #Load meteorological stations data
-csv_directory <- "XXXXX"
+#csv_directory <- "XXXXX"
 csv_directory <- "C:/Users/e.trypidaki/OneDrive - CREAF/Escritorio/Data/FirstClean/"
 csv_files <- list.files(csv_directory,pattern = "\\.csv$", full.names = TRUE)
 
@@ -285,9 +285,9 @@ QA_serieslenght_clean <- function(df, stations_to_remove) {
 stations_to_removeP <- c("0002I","1159C")
 
 #Calculate df with short series
-df_wss <- QA_serieslenght_clean(processed_df,stations_to_removeP)
+cleaned_df1 <- QA_serieslenght_clean(processed_df,stations_to_removeP)
 # Create a data set containing removed values
-removed_values <- anti_join(processed_df, df_wss)
+removed_values <- anti_join(processed_df,cleaned_df1)
 
 #_______________________________________________________________________________________
 ### Percentage of NA values####
@@ -339,7 +339,7 @@ QA_NApc_shortlist<- function(df, variable, threshold_na_percentage) {
 }
 
 ##Calculate
-NA_precipitation<- QA_NApc_shortlist(processed_df, "Precipitation", 30)
+NA_precipitation<- QA_NApc_shortlist(cleaned_df1, "Precipitation", 30)
 
 #Export report
 export_report(NA_precipitation,  "NA_precipitation_report.txt", "NA_precipitation_report.xlsx")
@@ -375,7 +375,7 @@ QA_NApc_plot <- function(df, highNA_variable, variable_name) {
 }
 
 # Generate plots for shortlisted stations
-High_NA_plots <- QA_NApc_plot(processed_df, NA_precipitation, "Precipitation")
+High_NA_plots <- QA_NApc_plot(cleaned_df1, NA_precipitation, "Precipitation")
 
 # Print individual plots
 for (Station_ID in names(High_NA_plots)) {
@@ -396,9 +396,10 @@ QA_NApc_clean <- function(df, stations_to_remove) {
 stations_to_removeP <- c("E092","65138402","9952")
 
 #Calculate df with short series
-df_wNA <- QA_NApc_clean(processed_df,stations_to_removeP)
+cleaned_df2 <- QA_NApc_clean(cleaned_df1,stations_to_removeP)
+
 # Create a data set containing removed values
-removed_values <- anti_join(processed_df, df_wNA)
+removed_values <- anti_join(cleaned_df1, cleaned_df2)
 
 
 #_______________________________________________________________________________________
@@ -425,7 +426,7 @@ QA_obs_plot <- function(df, variable_name) {
 }
 
 # Calculate and plot for Precipitation
-QA_obs_plot(processed_df, "Precipitation")
+QA_obs_plot(cleaned_df2, "Precipitation")
 QA_obs_plot(processed_df, "Tmean")
 
 # Function to plot observation count by number of stations against years
@@ -464,7 +465,7 @@ QA_heatmap <- function(df, variable_name, min_year, max_year) {
 }
 
 # Call the function to create the plot
-QA_heatmap(processed_df,"Precipitation",1990,2024)
+QA_heatmap(cleaned_df2,"Precipitation",1990,2024)
 QA_heatmap(processed_df,"Tmean",1990,2024)
 
 ### Large data gaps####
@@ -504,7 +505,7 @@ QA_gaps_shortlist <- function(df, variable, threshold_days) {
 }
 
 # Calculate gaps larger than 8 months
-gaps_series <- QA_gaps_shortlist(processed_df, "Precipitation", 250)
+gaps_series <- QA_gaps_shortlist(cleaned_df2, "Precipitation", 250)
 
 #Export report
 export_report(gaps_series,  "gaps_series_report.txt", "gaps_series_report.xlsx")
@@ -512,7 +513,7 @@ export_report(gaps_series,  "gaps_series_report.txt", "gaps_series_report.xlsx")
 #_______________________________________________________________________________________
 #QA_gaps_plot#
 #_______________________________________________________________________________________
-gaps <- processed_df[processed_df$Station_ID %in% unique(gaps_series$Station_ID), ]
+gaps <-cleaned_df2[cleaned_df2$Station_ID %in% unique(gaps_series$Station_ID), ]
 
 ## One way to plot all of them together
 QA_heatmap(gaps,"Precipitation",2015,2024)
@@ -550,7 +551,7 @@ QA_plot_gaps <- function(df, variable_name) {
 }
 
 ##Subset to the stations with gaps
-gaps_df <- processed_df[processed_df$Station_ID %in% unique(gaps_series$Station_ID), ]
+gaps_df <- cleaned_df2[cleaned_df2$Station_ID %in% unique(gaps_series$Station_ID), ]
 
 ##Plot list
 gap_plots_list <- QA_plot_gaps(gaps_df, "Precipitation")
@@ -574,10 +575,10 @@ QA_gaps_clean <- function(df, stations_to_remove) {
 stations_to_removeP <- c("303","9660","307")
 
 #Calculate df with short series
-df_wGAPS <- QA_gaps_clean(processed_df,stations_to_removeP)
+cleaned_df3 <- QA_gaps_clean(cleaned_df2,stations_to_removeP)
 
 # Create a data set containing removed values
-removed_values <- anti_join(processed_df, df_wGAPS )
+removed_values <- anti_join(cleaned_df2, cleaned_df3)
 
 #_______________________________________________________________________________________
 ### Filtering by observation before 2000 and after 2000 #####
@@ -593,16 +594,16 @@ QA_yearly_filtering <- function(df, variable, threshold_year, min_obs_below_thre
 }
 
 # Calculate
-prec_filtered <- QA_yearly_filtering(processed_df, Precipitation,  2000, 5, 1)
+cleaned_df4 <- QA_yearly_filtering(cleaned_df3, Precipitation,  2000, 5, 1)
 tempe_filtered  <- QA_yearly_filtering(processed_df,  Tmean, 2000, 5, 1)
 
 # Create a data set containing removed values
-removed_extreme_valuesP <- anti_join(processed_df, prec_filtered)
+removed_extreme_valuesP <- anti_join(cleaned_df3,cleaned_df4)
 removed_extreme_valuesT <- anti_join(processed_df, tempe_filtered)
 
 # Check removed values
-QA_plot_yearly(processed_df,  "Precipitation",removed_extreme_valuesP)
-QA_plot_yearly(processed_df,  "Tmean",removed_extreme_valuesT)
+removed_extreme_valuesP
+removed_extreme_valuesT
 
 
 #_______________________________________________________________________________________
@@ -623,7 +624,7 @@ QA_outlier_variation <- function(df, variable) {
 }
 
 # Calculate summary statistics for precipitation and temperature
-prec_statistics <- QA_outlier_variation(prec_filtered, Precipitation)
+prec_statistics <- QA_outlier_variation(cleaned_df3, Precipitation)
 tempe_statistics <- QA_outlier_variation(tempe_filtered, Tmean)
 
 ###Extreme values###
@@ -637,9 +638,11 @@ QA_outlier_precipitation <- function(df, variable,threshold) {
 }
 
 # Calculate for Precipitation
-prec_filtered2 <- QA_outlier_precipitation (prec_filtered ,Precipitation,1500)
+cleaned_df5 <- QA_outlier_precipitation (cleaned_df4 ,Precipitation,1500)
+
 # Create a data set containing removed values and Plot
-removed_valuesP <- anti_join(prec_filtered, prec_filtered2)
+removed_valuesP <- anti_join(cleaned_df4, cleaned_df5)
+
 export_report(removed_valuesP,  "Extreme_precipitation_values.txt", "Extreme_precipitation_values.xlsx")
 
 ### Function to delete extreme values of temperature ##
@@ -666,13 +669,14 @@ QA_outlier_temperature <- function(df, Tmean_variable, Tmax_variable, Tmin_varia
 
 # Calculate for Temperature
 tempe_filtered2 <- QA_outlier_temperature(tempe_filtered ,"Tmean", "Tmax","Tmin",-20,45)
+
 # Create a data set containing removed values
 removed_valuesT <- anti_join(tempe_filtered, tempe_filtered2)
 export_report(removed_valuesT,  "Extreme_temperature_values.txt", "Extreme_temperature_values.xlsx")
 
 
 # Calculate summary statistics for filtered precipitation and temperature
-prec_statistics_filtered <- QA_outlier_variation(prec_filtered2, Precipitation)
+prec_statistics_filtered <- QA_outlier_variation(cleaned_df5, Precipitation)
 tempe_statistics_filtered <- QA_outlier_variation(tempe_filtered2, Tmean)
 
 #_______________________________________________________________________________________
@@ -693,7 +697,7 @@ QA_reliable_stations <- function(df, variable, threshold_year, count_threshold) 
 }
 
 # Calculate for observation after 1990 and more than 240 (around 20 years, so more reliable)
-prec_stations <- QA_reliable_stations(prec_filtered2, Precipitation,  1990,  240)
+prec_stations <- QA_reliable_stations(cleaned_df5, Precipitation,  1990,  240)
 tempe_stations <- QA_reliable_stations(tempe_filtered2, Tmean,  1990,  240)
 
 # Function to perform the sampling process for diverse stations in the study area
@@ -748,11 +752,11 @@ plot(st_geometry(prec_points),add = TRUE,  pch = 19, col = "red4")
 plot(st_geometry(temp_points), add = TRUE, pch = 19, col = "blue4")
 
 # Generate plots for reliable stations
-QA_plot_yearly(prec_filtered2,"Precipitation",prec_selected_points)
+QA_plot_yearly(cleaned_df5,"Precipitation",prec_selected_points)
 QA_plot_yearly(tempe_filtered2,"Tmean",temp_selected_points)
 
 # Generate plots for reliable stations
-QA_plot_yearly_meansd(prec_filtered2,"Precipitation",prec_selected_points)
+QA_plot_yearly_meansd(cleaned_df5,"Precipitation",prec_selected_points)
 QA_plot_yearly_meansd(tempe_filtered2,"Tmean",temp_selected_points)
 
 ## Range for temperature max 5 degrees for one stations and for many 10
@@ -844,13 +848,13 @@ for (i in seq_along(stations_per_bufferT)) {
 }
 
 #Calculate precipitation
-stations_per_bufferP<- QA_buffer_stations(outliersP,prec_filtered2,"Precipitation",2000)
+stations_per_bufferP<- QA_buffer_stations(outliersP,cleaned_df5,"Precipitation",2000)
 
 # List to store plots for each buffer zone
 buffer_plotsP <- list()
 for (i in seq_along(stations_per_bufferP)) {
   # Generate plot for the current buffer zone
-  plot <- QA_plot_yearly(prec_filtered2, "Precipitation", stations_per_bufferP[[i]])
+  plot <- QA_plot_yearly(cleaned_df5, "Precipitation", stations_per_bufferP[[i]])
   buffer_plotsP[[i]] <- plot
 }
 
@@ -910,7 +914,7 @@ QA_altitude_stations <- function(df, outliers_df) {
 }
 
 # Call the function with your dataframes
-stations_per_altitP <- QA_altitude_stations(prec_filtered2, outliersP)
+stations_per_altitP <- QA_altitude_stations(cleaned_df5, outliersP)
 
 # List to store plots for each outlier
 altitude_plotsP <- list()
@@ -938,5 +942,5 @@ QA_outlier_clean <- function(df, outlier_station_ID, variable, outlier_date) {
 }
 
 # Clean the meteo dataframe
-cleaned_df <- QA_outlier_clean(prec_filtered2, "1088C", "Precipitation", "2020-10-15")
+cleaned_df6 <- QA_outlier_clean(prec_filtered2, "1088C", "Precipitation", "2020-10-15")
 
