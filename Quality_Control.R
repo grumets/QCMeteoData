@@ -201,6 +201,8 @@ QA_serieslenght_shortlist <- function(df, variable, threshold_series_length) {
     
     # Check if there are valid dates for the variable
     if (any(!is.na(subset_data$YYYYMMdate))) {
+      #Arrange so it count from the first date of data
+      subset_data <- arrange(subset_data, YYYYMMdate)
       # Find the earliest and oldest dates
       earliest_date <- min(subset_data$YYYYMMdate, na.rm = TRUE)
       oldest_date <- max(subset_data$YYYYMMdate, na.rm = TRUE)
@@ -451,11 +453,11 @@ QA_heatmap <- function(df, variable_name, min_year, max_year) {
   station_recording_periods <- df_filtered %>%
     group_by(Station_Number) %>%
     dplyr::reframe(Start_Date = min(Year), End_Date = max(Year))
-  
+ 
   # Plot recording periods
   p <- ggplot(station_recording_periods, aes(x = Start_Date, xend = End_Date, y = Station_Number)) +
     geom_segment(linewidth = 1, color = "dodgerblue3", alpha = 0.5) +
-    labs(title = "Recording Periods of Weather Stations",
+    labs(title = paste( "Recording Periods of", variable_name, "Weather Stations"),
          x = "Year",
          y = "Station Number") +
     theme_minimal() +
@@ -493,7 +495,7 @@ QA_gaps_shortlist <- function(df, variable, threshold_days) {
     if (any(!is.na(subset_data$YYYYMMdate))) {
       subset_data$YYYYMMdate <- as.Date(subset_data$YYYYMMdate)
       
-      #arrange so it count from the first date of data
+      #Arrange so it count from the first date of data
       subset_data <- arrange(subset_data, YYYYMMdate)
       
       # Calculate daily differences
