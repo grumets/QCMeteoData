@@ -854,19 +854,40 @@ QA_buffer_stations  <- function(outlier_stations_sf, all_stations, variable, ini
 
 #Calculate temperature
 stations_per_bufferT<- QA_buffer_stations(outliersT,tempe_filtered2,"Tmean",500) 
-
-# List to store plots for each buffer zone
-buffer_plotsT <- list()
-for (i in seq_along(stations_per_bufferT)) {
-  # Generate plot for the current buffer zone
-  plot <- QA_plot_yearly(tempe_filtered2, "Tmean", stations_per_bufferT[[i]])
-  buffer_plotsT[[i]] <- plot
-}
-
 #Calculate precipitation
 stations_per_bufferP<- QA_buffer_stations(outliersP,cleaned_df5,"Precipitation",2000)
 
+## Function to plot for outlier month only
+QA_plot_outlier <- function(df, variable, selected_points, month) {
+  # Filter df for shortlisted stations and the specific month
+  selected_df <- df[df$Station_ID %in% unique(selected_points$Station_ID) & df$Month == month, ]
+  
+  # Get unique stations with their altitudes
+  selected_df$StationID_Altitude <- paste(selected_df$Station_ID, ",", selected_df$Altitude, "m")
+  
+  # Plot time series for each selected station
+  p <- ggplot(selected_df, aes(x = Year, y = .data[[variable]], color = StationID_Altitude)) +
+    geom_point() +  # Plot points
+    geom_line() +   # Connect points with lines
+    labs(title = paste(variable,"for an outlier in the", month,"month, at Station",selected_df$Station_ID),
+         x = "Year", y = variable,
+         color = "StationID_Altitude") +
+    theme_minimal()  # Minimal theme
+  
+  return(p)
+}
+
+
 # List to store plots for each buffer zone
+# Temperature
+buffer_plotsT <- list()
+for (i in seq_along(stations_per_bufferT)) {
+  # Generate plot for the current buffer zone
+  plot <- QA_plot_outlier(tempe_filtered2, "Tmean", stations_per_bufferT[[i]])
+  buffer_plotsT[[i]] <- plot
+}
+
+#Precipitaiton
 buffer_plotsP <- list()
 for (i in seq_along(stations_per_bufferP)) {
   # Generate plot for the current buffer zone
