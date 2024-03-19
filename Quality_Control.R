@@ -883,7 +883,7 @@ QA_plot_outlier <- function(df, variable, selected_points, month) {
 buffer_plotsT <- list()
 for (i in seq_along(stations_per_bufferT)) {
   # Generate plot for the current buffer zone
-  plot <- QA_plot_outlier(tempe_filtered2, "Tmean", stations_per_bufferT[[i]])
+  plot <- QA_plot_outlier(tempe_filtered2, "Tmean", stations_per_bufferT[[i]], outliersT$Month[i])
   buffer_plotsT[[i]] <- plot
 }
 
@@ -891,7 +891,7 @@ for (i in seq_along(stations_per_bufferT)) {
 buffer_plotsP <- list()
 for (i in seq_along(stations_per_bufferP)) {
   # Generate plot for the current buffer zone
-  plot <- QA_plot_yearly(cleaned_df5, "Precipitation", stations_per_bufferP[[i]])
+  plot <- QA_plot_yearly(cleaned_df5, "Precipitation", stations_per_bufferP[[i]], outliersP$Month[i])
   buffer_plotsP[[i]] <- plot
 }
 
@@ -957,7 +957,7 @@ stations_per_altitP <- QA_altitude_stations(cleaned_df5, outliersP)
 altitude_plotsP <- list()
 for (i in seq_along(stations_per_altitP)) {
   # Generate plot for the current buffer zone
-  plot <- QA_plot_yearly(prec_filtered2, "Precipitation", stations_per_altitP[[i]])
+  plot <- QA_plot_outlier(prec_filtered2, "Precipitation", stations_per_altitP[[i]], outliersP$Month[i])
   altitude_plotsP[[i]] <- plot
 }
 
